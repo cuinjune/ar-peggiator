@@ -30,7 +30,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/index.html'));
 });
 
-// create https server
+// create http/https server
 const key = shouldUseHttps ? fs.readFileSync(`${__dirname}/key.pem`) : null;
 const cert = shouldUseHttps ? fs.readFileSync(`${__dirname}/cert.pem`) : null;
 const server = shouldUseHttps ? https.createServer({ key: key, cert: cert }, app) : http.createServer(app);

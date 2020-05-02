@@ -78,8 +78,8 @@ class Scene {
 		// add player
 		this.addSelf();
 
-		// upload player look to server
-		socket.emit('look', this.getPlayerLook());
+		// add preview note
+		this.addPreviewNote();
 
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
@@ -100,47 +100,63 @@ class Scene {
 	addPlayer(obj) {
 
 		// dimension
-		const cameraRadiusTop = 0.005;
-		const cameraRadiusBottom = 0.01;
-		const cameraHeight = 0.01;
-		const deviceWidth = 0.0704;
-		const deviceHeight = 0.1499;
-		const deviceDepth = 0.0078;
+		const playerEyeRadiusTop = 0.005;
+		const playerEyeRadiusBottom = 0.01;
+		const playerEyeHeight = 0.01;
+		const playerBodyWidth = 0.0704;
+		const playerBodyHeight = 0.1499;
+		const playerBodyDepth = 0.0078;
 
 		// geometry
-		const cameraGeometry = new THREE.CylinderBufferGeometry(cameraRadiusTop, cameraRadiusBottom, cameraHeight, 32).rotateX(Math.PI / 2);
-		const deviceGeometry = new THREE.BoxBufferGeometry(deviceWidth, deviceHeight, deviceDepth);
+		const playerEyeGeometry = new THREE.CylinderBufferGeometry(playerEyeRadiusTop, playerEyeRadiusBottom, playerEyeHeight, 32).rotateX(Math.PI / 2);
+		const playerBodyGeometry = new THREE.BoxBufferGeometry(playerBodyWidth, playerBodyHeight, playerBodyDepth);
 
 		// material
-		const cameraMaterial = new THREE.MeshLambertMaterial({ color: obj.color.getHex() });
-		const deviceMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25).getHex() });
+		const playerEyeMaterial = new THREE.MeshLambertMaterial({ color: obj.color.getHex() });
+		const playerBodyMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25).getHex() });
 
 		// mesh
-		const camera = new THREE.Mesh(cameraGeometry, cameraMaterial);
-		const device = new THREE.Mesh(deviceGeometry, deviceMaterial);
-		camera.position.z = cameraHeight * 0.5;
+		obj.playerEye = new THREE.Mesh(playerEyeGeometry, playerEyeMaterial);
+		obj.playerBody = new THREE.Mesh(playerBodyGeometry, playerBodyMaterial);
+		obj.playerEye.position.z = playerEyeHeight * 0.5;
 
-		// add the device to the camera
-		camera.add(device);
+		// add body to eye
+		obj.playerEye.add(obj.playerBody);
 
-		device.position.z = cameraHeight * 0.5 + deviceDepth * 0.5;
-		device.position.y = -deviceHeight * 0.25;
-
-		// add the player to the scene
+		// set body position relative to eye
+		obj.playerBody.position.z = playerEyeHeight * 0.5 + playerBodyDepth * 0.5;
+		obj.playerBody.position.y = -playerBodyHeight * 0.25;
+		
+		// add eye to player
 		obj.player = new THREE.Group();
-		obj.player.add(camera);
+		obj.player.add(obj.playerEye);
 
 		// add player to scene
 		this.scene.add(obj.player);
 	}
 
 	addSelf() {
-		// color
+		this.color = new THREE.Color(0.5, 0.5, 0.5);
+		this.addPlayer(this);
+	}
+
+	addPreviewNote() {
+		const geometry = new THREE.SphereBufferGeometry(0.0333, 24, 24);
+		const material = new THREE.MeshPhongMaterial({ color: this.color.getHex(), transparent: true, opacity: 0.75 });
+		this.previewedNote = new THREE.Mesh(geometry, material);
+		this.previewedNote.scale.set(0, 0, 0);
+		this.previewedNote.visible = false;
+		this.scene.add(this.previewedNote);
+	}
+
+	setPlayerLook(_id) {
+		Math.seedrandom(_id);
 		const colorR = this.getRandomRange(0.5, 1);
 		const colorG = this.getRandomRange(0.5, 1);
 		const colorB = this.getRandomRange(0.5, 1);
 		this.color = new THREE.Color(colorR, colorG, colorB);
-		this.addPlayer(this);
+		this.playerEye.material.color.setHex(this.color.getHex());
+		this.previewedNote.material.color.setHex(this.color.getHex());
 	}
 
 	addClient(_clientProp, _id) {
@@ -197,34 +213,64 @@ class Scene {
 		this.camera.updateProjectionMatrix();
 	}
 
+	previewNote() {
+		console.log("previewNote");
+		this.isNotePreviewed = true;
+		this.previewedNote.visible = true;
+		this.previewedNote.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+	}
+
 	addNote() {
-		const geometry = new THREE.SphereBufferGeometry(0.025, 24, 24);
-		const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random() });
-		const mesh = new THREE.Mesh(geometry, material);
-		mesh.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
-		mesh.quaternion.setFromRotationMatrix(this.controller.matrixWorld);
-		this.scene.add(mesh);
+		console.log("addNote");
+		// const geometry = new THREE.SphereBufferGeometry(0.025, 24, 24);
+		// const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random() });
+		// const mesh = new THREE.Mesh(geometry, material);
+		// mesh.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+		// mesh.quaternion.setFromRotationMatrix(this.controller.matrixWorld);
+		// this.scene.add(mesh);
 	}
 
 	eraseNotes() {
+		console.log("eraseNotes");
 	}
 
 	onSelectStart() {
-		this.isTouched = true;
-		this.touchedTime = new Date();
-		this.touchedCameraPosition = this.getCameraPosition();
-		this.touchedCameraQuaternion = this.getCameraQuaternion();
+		const time = Date.now();
+		this.maxDoubleTapTime = 250;
+
+		// if double tapped, erase notes
+		if (time - this.touchedTime <= this.maxDoubleTapTime) {
+			clearTimeout(this.previewNoteTimer);
+			this.eraseNotes();
+			this.isTouched = false;
+		}
+		else {
+			this.isNotePreviewed = false;
+			this.previewNoteTimer = setTimeout(() => this.previewNote(), this.maxDoubleTapTime);
+			this.isTouched = true;
+		}
+		this.touchedTime = time;
 	}
 
 	onSelect() {
 		if (this.isTouched) {
-			this.addNote();
+			if (this.isNotePreviewed) {
+				this.addNote();
+			}
+			else {
+				clearTimeout(this.previewNoteTimer);
+			}
 		}
 	}
 
 	onSelectEnd() {
 		if (this.isTouched) {
 			this.isTouched = false;
+		}
+		if (this.isNotePreviewed) {
+			this.isNotePreviewed = false;
+			this.previewedNote.visible = false;
+			this.previewedNote.scale.set(0, 0, 0);
 		}
 	}
 
@@ -244,19 +290,19 @@ class Scene {
 	//////////////////////////////////////////////////////////////////////
 	// Rendering
 	update() {
-		if (this.isTouched) {
-			const currentTime = new Date();
-			const elapsedTime = currentTime - this.touchedTime;
-			if (elapsedTime > 3000) {
-				this.eraseNotes();
-				this.isTouched = false;
-			}
-		}
-
+		
 		// update player movement
 		this.player.position.copy(this.getCameraPosition());
 		this.player.quaternion.copy(this.getCameraQuaternion());
 
+		// update previewed note movement
+		if (this.isNotePreviewed) {
+			const lerpAmount = 0.5;
+			const previewedNotePosition = new THREE.Vector3().set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+			const previewedNoteScale = new THREE.Vector3(1, 1, 1);
+			this.previewedNote.position.lerp(previewedNotePosition, lerpAmount);
+			this.previewedNote.scale.lerp(previewedNoteScale, lerpAmount);
+		}
 
 		// send movement to server to update clients data (calls back updateClientMoves)
 		socket.emit('move', this.getPlayerMove());
@@ -295,6 +341,12 @@ function initSocketConnection() {
 		// keep a local copy of my ID:
 		console.log('My socket ID is: ' + _id);
 		id = _id;
+
+		// set player look
+		glScene.setPlayerLook(id);
+
+		// upload player look to server
+		socket.emit('look', glScene.getPlayerLook());
 
 		// for each existing user, add them as a client
 		for (let i = 0; i < _ids.length; i++) {
