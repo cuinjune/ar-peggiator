@@ -1,39 +1,12 @@
-/*
-const path = require('path');
-const express = require('express');
-const bodyParser = require('body-parser');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// handle data in a nice way
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-// static path
-const publicPath = path.resolve(`${__dirname}/public`);
-const socketioPath = path.resolve(`${__dirname}/node_modules/socket.io-client/dist`);
-
-// set your static server
-app.use(express.static(publicPath));
-app.use(express.static(socketioPath));
-
-// views
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/index.html'));
-});
-
-// start listening
-const server = app.listen(PORT);
-console.log('Server is running localhost on port: ' + PORT);
-*/
-
+const shouldUseHttps = true;
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const data = JSON.parse(fs.readFileSync('db/data.json'));
 const app = express();
-const https = require('https');
+const http = shouldUseHttps ? null : require('http');
+const https = shouldUseHttps ? require('https') : null;
 const PORT = process.env.PORT || 3000;
 
 // handle data in a nice way
@@ -58,9 +31,9 @@ app.get('/', (req, res) => {
 });
 
 // create https server
-const key = fs.readFileSync(`${__dirname}/key.pem`);
-const cert = fs.readFileSync(`${__dirname}/cert.pem`);
-const server = https.createServer({ key: key, cert: cert }, app);
+const key = shouldUseHttps ? fs.readFileSync(`${__dirname}/key.pem`) : null;
+const cert = shouldUseHttps ? fs.readFileSync(`${__dirname}/cert.pem`) : null;
+const server = shouldUseHttps ? https.createServer({ key: key, cert: cert }, app) : http.createServer(app);
 
 // start listening
 server.listen(PORT, () => {
@@ -151,22 +124,22 @@ io.on('connection', client => {
 process.stdin.resume(); // so the program will not close instantly
 
 function exitHandler(options, exitCode) {
-    if (options.cleanup) {
-      console.log("\nwriting 'db/data.json' file");
-      fs.writeFileSync('db/data.json', JSON.stringify(data, null, 2));
-    }
-    if (options.exit) process.exit();
+  if (options.cleanup) {
+    console.log("\nwriting 'db/data.json' file");
+    fs.writeFileSync('db/data.json', JSON.stringify(data, null, 2));
+  }
+  if (options.exit) process.exit();
 }
 
 // do something when app is closing
-process.on('exit', exitHandler.bind(null, {cleanup:true}));
+process.on('exit', exitHandler.bind(null, { cleanup: true }));
 
 // catches ctrl+c event
-process.on('SIGINT', exitHandler.bind(null, {exit:true}));
+process.on('SIGINT', exitHandler.bind(null, { exit: true }));
 
 // catches "kill pid" (for example: nodemon restart)
-process.on('SIGUSR1', exitHandler.bind(null, {exit:true}));
-process.on('SIGUSR2', exitHandler.bind(null, {exit:true}));
+process.on('SIGUSR1', exitHandler.bind(null, { exit: true }));
+process.on('SIGUSR2', exitHandler.bind(null, { exit: true }));
 
 // catches uncaught exceptions
-process.on('uncaughtException', exitHandler.bind(null, {exit:true}));
+process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
