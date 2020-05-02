@@ -75,7 +75,8 @@ const io = require('socket.io')({
   // "polling duration": 0
 }).listen(server);
 
-let clients = {};
+// clients object
+const clients = {};
 
 // socket setup
 io.on('connection', client => {
@@ -93,22 +94,33 @@ io.on('connection', client => {
   // make sure to send clients, his ID, and a list of all keys
   client.emit('introduction', clients, client.id, Object.keys(clients));
 
+  // send the current notes data to myself
+  client.emit('updateNotes', data.notes);
+
   // RECEIVERS
-  client.on('look', (data) => {
+  client.on('look', (_data) => {
     if (clients[client.id]) {
-      clients[client.id].color = data[0];
+      clients[client.id].color = _data[0];
 
       // update everyone that the number of users has changed
       io.sockets.emit('newUserConnected', clients[client.id], io.engine.clientsCount, client.id);
     }
   });
 
-  client.on('move', (data) => {
+  client.on('move', (_data) => {
     if (clients[client.id]) {
-      clients[client.id].position = data[0];
-      clients[client.id].quaternion = data[1];
+      clients[client.id].position = _data[0];
+      clients[client.id].quaternion = _data[1];
     }
     client.emit('userMoves', clients); // send back to the sender
+  });
+
+  client.on('addNote', (_data) => {
+    if (clients[client.id]) {
+      data.notes.push({ color: _data[0], position: _data[1] });
+    }
+    // update everyone that notes has been updated
+    io.sockets.emit('updateNotes', data.notes);
   });
 
   // handle the disconnection

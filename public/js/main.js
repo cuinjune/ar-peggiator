@@ -78,8 +78,15 @@ class Scene {
 		// add player
 		this.addSelf();
 
+		// note geometry
+		this.radialSegments = 32;
+		this.noteGeometry = new THREE.SphereBufferGeometry(0.0333, this.radialSegments, this.radialSegments);
+
 		// add preview note
 		this.addPreviewNote();
+
+		// add notes array
+		this.notes = [];
 
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
@@ -98,7 +105,6 @@ class Scene {
 	// Clients
 
 	addPlayer(obj) {
-
 		// dimension
 		const playerEyeRadiusTop = 0.005;
 		const playerEyeRadiusBottom = 0.01;
@@ -108,12 +114,12 @@ class Scene {
 		const playerBodyDepth = 0.0078;
 
 		// geometry
-		const playerEyeGeometry = new THREE.CylinderBufferGeometry(playerEyeRadiusTop, playerEyeRadiusBottom, playerEyeHeight, 32).rotateX(Math.PI / 2);
+		const playerEyeGeometry = new THREE.CylinderBufferGeometry(playerEyeRadiusTop, playerEyeRadiusBottom, playerEyeHeight, this.radialSegments).rotateX(Math.PI / 2);
 		const playerBodyGeometry = new THREE.BoxBufferGeometry(playerBodyWidth, playerBodyHeight, playerBodyDepth);
 
 		// material
-		const playerEyeMaterial = new THREE.MeshLambertMaterial({ color: obj.color.getHex() });
-		const playerBodyMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25).getHex() });
+		const playerEyeMaterial = new THREE.MeshLambertMaterial({ color: obj.color });
+		const playerBodyMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25) });
 
 		// mesh
 		obj.playerEye = new THREE.Mesh(playerEyeGeometry, playerEyeMaterial);
@@ -126,7 +132,7 @@ class Scene {
 		// set body position relative to eye
 		obj.playerBody.position.z = playerEyeHeight * 0.5 + playerBodyDepth * 0.5;
 		obj.playerBody.position.y = -playerBodyHeight * 0.25;
-		
+
 		// add eye to player
 		obj.player = new THREE.Group();
 		obj.player.add(obj.playerEye);
@@ -141,9 +147,8 @@ class Scene {
 	}
 
 	addPreviewNote() {
-		const geometry = new THREE.SphereBufferGeometry(0.0333, 24, 24);
-		const material = new THREE.MeshPhongMaterial({ color: this.color.getHex(), transparent: true, opacity: 0.75 });
-		this.previewedNote = new THREE.Mesh(geometry, material);
+		const material = new THREE.MeshPhongMaterial({ color: this.color, transparent: true, opacity: 0.75 });
+		this.previewedNote = new THREE.Mesh(this.noteGeometry, material);
 		this.previewedNote.scale.set(0, 0, 0);
 		this.previewedNote.visible = false;
 		this.scene.add(this.previewedNote);
@@ -155,8 +160,8 @@ class Scene {
 		const colorG = this.getRandomRange(0.5, 1);
 		const colorB = this.getRandomRange(0.5, 1);
 		this.color = new THREE.Color(colorR, colorG, colorB);
-		this.playerEye.material.color.setHex(this.color.getHex());
-		this.previewedNote.material.color.setHex(this.color.getHex());
+		this.playerEye.material.color.set(this.color);
+		this.previewedNote.material.color.set(this.color);
 	}
 
 	addClient(_clientProp, _id) {
@@ -186,6 +191,22 @@ class Scene {
 		}
 	}
 
+	updateNotes(_notes) {
+		// remove all existing notes from scene
+		for (let i = 0; i < this.notes.length; i++) {
+			this.scene.remove(this.notes[i]);
+		}
+		// empty notes array
+		this.notes = [];
+
+		// add new notes to scene
+		for (let i = 0; i < _notes.length; i++) {
+			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().fromArray(_notes[i].color)}));
+			this.notes[i].position.fromArray(_notes[i].position);
+			this.scene.add(this.notes[i]);
+		}
+	}
+
 	// data to send to the server
 	getPlayerLook() {
 		return [
@@ -197,6 +218,13 @@ class Scene {
 		return [
 			[this.player.position.x, this.player.position.y, this.player.position.z],
 			[this.player.quaternion.x, this.player.quaternion.y, this.player.quaternion.z, this.player.quaternion.w]
+		];
+	}
+
+	getNote() {
+		return [
+			[this.color.r, this.color.g, this.color.b],
+			[this.previewedNote.position.x, this.previewedNote.position.y, this.previewedNote.position.z]
 		];
 	}
 
@@ -221,13 +249,8 @@ class Scene {
 	}
 
 	addNote() {
-		console.log("addNote");
-		// const geometry = new THREE.SphereBufferGeometry(0.025, 24, 24);
-		// const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random() });
-		// const mesh = new THREE.Mesh(geometry, material);
-		// mesh.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
-		// mesh.quaternion.setFromRotationMatrix(this.controller.matrixWorld);
-		// this.scene.add(mesh);
+		// send note to server to update notes data (calls back updateNotes)
+		socket.emit('addNote', this.getNote());
 	}
 
 	eraseNotes() {
@@ -290,7 +313,7 @@ class Scene {
 	//////////////////////////////////////////////////////////////////////
 	// Rendering
 	update() {
-		
+
 		// update player movement
 		this.player.position.copy(this.getCameraPosition());
 		this.player.quaternion.copy(this.getCameraQuaternion());
@@ -381,6 +404,11 @@ function initSocketConnection() {
 	// update when one of the users moves in space
 	socket.on('userMoves', _clientProps => {
 		glScene.updateClientMoves(_clientProps);
+	});
+
+	// update when there is change to notes data
+	socket.on('updateNotes', _notes => {
+		glScene.updateNotes(_notes);
 	});
 }
 
