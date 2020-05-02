@@ -1,5 +1,6 @@
 # ignore all those dependencies
 node_modules
+libpd
 # ignore weird mac files
 .DS_Store
 # ignore the .pem files

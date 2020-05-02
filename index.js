@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
+const data = JSON.parse(fs.readFileSync('db/data.json'));
 const app = express();
 const https = require('https');
 const PORT = process.env.PORT || 3000;
@@ -41,10 +42,14 @@ app.use(bodyParser.json());
 
 // static path
 const publicPath = path.resolve(`${__dirname}/public`);
+const emscriptenPath = path.resolve(`${publicPath}/emscripten`);
+const pdPath = path.resolve(`${emscriptenPath}/pd`);
 const socketioPath = path.resolve(`${__dirname}/node_modules/socket.io-client/dist`);
 
 // set your static server
 app.use(express.static(publicPath));
+app.use(express.static(emscriptenPath));
+app.use(express.static(pdPath));
 app.use(express.static(socketioPath));
 
 // views
@@ -55,11 +60,40 @@ app.get('/', (req, res) => {
 // create https server
 const key = fs.readFileSync(`${__dirname}/key.pem`);
 const cert = fs.readFileSync(`${__dirname}/cert.pem`);
-const server = https.createServer({key: key, cert: cert }, app);
+const server = https.createServer({ key: key, cert: cert }, app);
 
 // start listening
-server.listen(PORT, () => { 
-  console.log(`Server is running localhost on port: ${PORT}`) 
+server.listen(PORT, () => {
+  console.log(`Server is running localhost on port: ${PORT}`)
+});
+
+// get note data
+app.get("/api/data/notes", async (req, res) => {
+  res.json(data.notes);
+});
+
+// add a note to data
+app.post("/api/data/notes", (req, res) => {
+  data.notes.push({ color: req.body.color, position: req.body.position });
+  res.json(data.notes);
+});
+
+// edit the existing note
+app.put("/api/data/notes/:index", (req, res) => {
+  const index = Number(req.params.index);
+  if (data.notes[index]) {
+    data.notes[index] = { color: req.body.color, position: req.body.position };
+  }
+  res.json(data.notes);
+});
+
+// delete a note from data
+app.delete("/api/data/notes/:index", (req, res) => {
+  const index = Number(req.params.index);
+  if (data.notes[index]) {
+    data.notes.splice(index, 1);
+  }
+  res.json(data.notes);
 });
 
 // socket.io
@@ -76,6 +110,7 @@ io.on('connection', client => {
 
   // add a new client indexed by his id
   clients[client.id] = {
+    color: [0, 0, 0],
     position: [0, 0, 0],
     quaternion: [0, 0, 0, 0]
   }
@@ -85,8 +120,15 @@ io.on('connection', client => {
   // make sure to send clients, his ID, and a list of all keys
   client.emit('introduction', clients, client.id, Object.keys(clients));
 
-  // send to all existing clients when a new user is connected
-  io.sockets.emit('newUserConnected', clients[client.id], io.engine.clientsCount, client.id);
+  // RECEIVERS
+  client.on('look', (data) => {
+    if (clients[client.id]) {
+      clients[client.id].color = data[0];
+
+      // update everyone that the number of users has changed
+      io.sockets.emit('newUserConnected', clients[client.id], io.engine.clientsCount, client.id);
+    }
+  });
 
   client.on('move', (data) => {
     if (clients[client.id]) {
@@ -103,3 +145,28 @@ io.on('connection', client => {
     console.log('User ' + client.id + ' diconnected, there are ' + io.engine.clientsCount + ' clients connected');
   });
 });
+
+
+// exit handler
+process.stdin.resume(); // so the program will not close instantly
+
+function exitHandler(options, exitCode) {
+    if (options.cleanup) {
+      console.log("\nwriting 'db/data.json' file");
+      fs.writeFileSync('db/data.json', JSON.stringify(data, null, 2));
+    }
+    if (options.exit) process.exit();
+}
+
+// do something when app is closing
+process.on('exit', exitHandler.bind(null, {cleanup:true}));
+
+// catches ctrl+c event
+process.on('SIGINT', exitHandler.bind(null, {exit:true}));
+
+// catches "kill pid" (for example: nodemon restart)
+process.on('SIGUSR1', exitHandler.bind(null, {exit:true}));
+process.on('SIGUSR2', exitHandler.bind(null, {exit:true}));
+
+// catches uncaught exceptions
+process.on('uncaughtException', exitHandler.bind(null, {exit:true}));

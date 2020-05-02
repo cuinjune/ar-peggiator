@@ -1,4 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
+// modules to import
+////////////////////////////////////////////////////////////////////////////////
+
+import * as THREE from 'https://threejs.org/build/three.module.js';
+import { ARButton } from 'https://threejs.org/examples/jsm/webxr/ARButton.js';
+
+////////////////////////////////////////////////////////////////////////////////
 // global variables
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -19,17 +26,11 @@ let glScene;
 // three.js scene
 ////////////////////////////////////////////////////////////////////////////////
 
-import * as THREE from 'https://threejs.org/build/three.module.js';
-import { ARButton } from 'https://threejs.org/examples/jsm/webxr/ARButton.js';
-
 class Scene {
-	constructor(_width, _height, _socket) {
+	constructor(_width, _height) {
 
 		const container = document.createElement('div');
 		document.body.appendChild(container);
-
-		// socket to communicate with the server
-		this.socket = _socket;
 
 		// utility
 		this.width = _width;
@@ -39,7 +40,7 @@ class Scene {
 		this.scene = new THREE.Scene();
 
 		// camera
-		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.01, 100);
+		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.025, 100);
 		this.scene.add(this.camera);
 
 		// light
@@ -58,52 +59,96 @@ class Scene {
 		// push the canvas to the DOM
 		container.appendChild(this.renderer.domElement);
 
-		// AR button
-		if (isMobile) {
-			document.body.appendChild(ARButton.createButton(this.renderer));
-		}
-
 		// window resize listener
 		window.addEventListener("resize", () => this.windowResized());
 
-		// controller
+		// AR button
 		if (isMobile) {
+			document.body.appendChild(ARButton.createButton(this.renderer));
 			this.controller = this.renderer.xr.getController(0);
+			this.controller.addEventListener('selectstart', () => this.onSelectStart());
 			this.controller.addEventListener('select', () => this.onSelect());
+			this.controller.addEventListener('selectend', () => this.onSelectEnd());
 			this.scene.add(this.controller);
 		}
+		// touch state
+		this.isTouched = false;
+		this.touchedTime = 0;
 
 		// add player
 		this.addSelf();
 
+		// upload player look to server
+		socket.emit('look', this.getPlayerLook());
+
 		// start the loop
-		this.renderer.setAnimationLoop((time) => this.update(time));
+		this.renderer.setAnimationLoop(() => this.update());
+	}
+
+	//////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////
+	// Utils
+
+	getRandomRange(from, to) {
+		return Math.random() * (to - from) + from;
 	}
 
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
 	// Clients
 
+	addPlayer(obj) {
+
+		// dimension
+		const cameraRadiusTop = 0.005;
+		const cameraRadiusBottom = 0.01;
+		const cameraHeight = 0.01;
+		const deviceWidth = 0.0704;
+		const deviceHeight = 0.1499;
+		const deviceDepth = 0.0078;
+
+		// geometry
+		const cameraGeometry = new THREE.CylinderBufferGeometry(cameraRadiusTop, cameraRadiusBottom, cameraHeight, 32).rotateX(Math.PI / 2);
+		const deviceGeometry = new THREE.BoxBufferGeometry(deviceWidth, deviceHeight, deviceDepth);
+
+		// material
+		const cameraMaterial = new THREE.MeshLambertMaterial({ color: obj.color.getHex() });
+		const deviceMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25).getHex() });
+
+		// mesh
+		const camera = new THREE.Mesh(cameraGeometry, cameraMaterial);
+		const device = new THREE.Mesh(deviceGeometry, deviceMaterial);
+		camera.position.z = cameraHeight * 0.5;
+
+		// add the device to the camera
+		camera.add(device);
+
+		device.position.z = cameraHeight * 0.5 + deviceDepth * 0.5;
+		device.position.y = -deviceHeight * 0.25;
+
+		// add the player to the scene
+		obj.player = new THREE.Group();
+		obj.player.add(camera);
+
+		// add player to scene
+		this.scene.add(obj.player);
+	}
+
 	addSelf() {
 		// color
-		const playerMaterial = new THREE.MeshLambertMaterial({ color: 0x9797CE });
-
-		// player
-		this.player = new THREE.Mesh(new THREE.CubeGeometry(0.1, 0.1, 0.1), playerMaterial);
-
-		// add player to the scene
-		this.scene.add(this.player);
+		const colorR = this.getRandomRange(0.5, 1);
+		const colorG = this.getRandomRange(0.5, 1);
+		const colorB = this.getRandomRange(0.5, 1);
+		this.color = new THREE.Color(colorR, colorG, colorB);
+		this.addPlayer(this);
 	}
 
 	addClient(_clientProp, _id) {
-		// color
-		const playerMaterial = new THREE.MeshLambertMaterial({ color: 0x9797CE });
-
-		// player
-		clients[_id].player = new THREE.Mesh(new THREE.CubeGeometry(0.04, 0.08, 0.01), playerMaterial);
-
-		// add player to scene
-		this.scene.add(clients[_id].player);
+		const obj = {
+			color: new THREE.Color().fromArray(_clientProp.color)
+		};
+		this.addPlayer(obj);
+		clients[_id].player = obj.player;
 	}
 
 	removeClient(_id) {
@@ -126,6 +171,12 @@ class Scene {
 	}
 
 	// data to send to the server
+	getPlayerLook() {
+		return [
+			[this.color.r, this.color.g, this.color.b]
+		];
+	}
+
 	getPlayerMove() {
 		return [
 			[this.player.position.x, this.player.position.y, this.player.position.z],
@@ -146,32 +197,69 @@ class Scene {
 		this.camera.updateProjectionMatrix();
 	}
 
-	// called when xr controller is selected
+	addNote() {
+		const geometry = new THREE.SphereBufferGeometry(0.025, 24, 24);
+		const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random() });
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+		mesh.quaternion.setFromRotationMatrix(this.controller.matrixWorld);
+		this.scene.add(mesh);
+	}
+
+	eraseNotes() {
+	}
+
+	onSelectStart() {
+		this.isTouched = true;
+		this.touchedTime = new Date();
+		this.touchedCameraPosition = this.getCameraPosition();
+		this.touchedCameraQuaternion = this.getCameraQuaternion();
+	}
+
 	onSelect() {
-		// const geometry = new THREE.CylinderBufferGeometry(0, 0.05, 0.2, 32).rotateX(Math.PI / 2);
-		// const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random() });
-		// const mesh = new THREE.Mesh(geometry, material);
-		// mesh.position.set(0, 0, -0.3).applyMatrix4(this.controller.matrixWorld);
-		// mesh.quaternion.setFromRotationMatrix(this.controller.matrixWorld);
-		// this.scene.add(mesh);
+		if (this.isTouched) {
+			this.addNote();
+		}
+	}
+
+	onSelectEnd() {
+		if (this.isTouched) {
+			this.isTouched = false;
+		}
+	}
+
+	getCameraPosition() {
+		const position = new THREE.Vector3();
+		position.setFromMatrixPosition(this.camera.matrixWorld);
+		return position;
+	}
+
+	getCameraQuaternion() {
+		const quaternion = new THREE.Quaternion();
+		quaternion.setFromRotationMatrix(this.camera.matrixWorld);
+		return quaternion;
 	}
 
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
 	// Rendering
-	update(time) {
-
-		if (isMobile) {
-			var position = new THREE.Vector3();
-			var quaternion = new THREE.Quaternion();
-			var scale = new THREE.Vector3();
-			this.camera.matrixWorld.decompose(position, quaternion, scale);
-			this.player.position.copy(position);
-			this.player.quaternion.copy(quaternion);
+	update() {
+		if (this.isTouched) {
+			const currentTime = new Date();
+			const elapsedTime = currentTime - this.touchedTime;
+			if (elapsedTime > 3000) {
+				this.eraseNotes();
+				this.isTouched = false;
+			}
 		}
 
+		// update player movement
+		this.player.position.copy(this.getCameraPosition());
+		this.player.quaternion.copy(this.getCameraQuaternion());
+
+
 		// send movement to server to update clients data (calls back updateClientMoves)
-		this.socket.emit('move', this.getPlayerMove());
+		socket.emit('move', this.getPlayerMove());
 
 		// render
 		this.renderer.render(this.scene, this.camera);
@@ -251,7 +339,7 @@ function initSocketConnection() {
 function createScene() {
 	// initialize three.js scene
 	console.log("Creating three.js scene...");
-	glScene = new Scene(window.innerWidth, window.innerHeight, socket);
+	glScene = new Scene(window.innerWidth, window.innerHeight);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
