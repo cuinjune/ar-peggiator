@@ -201,7 +201,7 @@ class Scene {
 
 		// add new notes to scene
 		for (let i = 0; i < _notes.length; i++) {
-			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().fromArray(_notes[i].color)}));
+			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().fromArray(_notes[i].color) }));
 			this.notes[i].position.fromArray(_notes[i].position);
 			this.scene.add(this.notes[i]);
 		}
@@ -242,7 +242,6 @@ class Scene {
 	}
 
 	previewNote() {
-		console.log("previewNote");
 		this.isNotePreviewed = true;
 		this.previewedNote.visible = true;
 		this.previewedNote.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
@@ -254,8 +253,19 @@ class Scene {
 	}
 
 	eraseNotes() {
-		// send indices to remove to server to update notes data (calls back updateNotes)
-		socket.emit('eraseNotes', []);
+		this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
+		const frustum = new THREE.Frustum();
+		frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+		const indices = []; // indices to remove elements from notes data
+		for (let i = 0; i < this.notes.length; i++) {
+			if (frustum.containsPoint(this.notes[i].position)) {
+				indices.push(i);
+			}
+		}
+		if (indices.length) {
+			// send indices to remove to server to update notes data (calls back updateNotes)
+			socket.emit('eraseNotes', indices);
+		}
 	}
 
 	onSelectStart() {
