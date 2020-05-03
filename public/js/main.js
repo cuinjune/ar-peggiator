@@ -91,6 +91,14 @@ class Scene {
 		// array of note ids in string for a sequencer to play (stored in play order)
 		this.noteIdsToPlay = [];
 
+		// sequencer tempo
+		const sequencerBpm = 120;
+		this.sequencerClockTime = 15000 / sequencerBpm; // 16th-note milliseconds
+
+		// start the sequencer clock (sync with other users as much as possible)
+		const sequencerStartTime = this.sequencerClockTime - (Date.now() % this.sequencerClockTime);
+		setTimeout(() => this.sequencerClock(), sequencerStartTime);
+
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
 	}
@@ -312,6 +320,20 @@ class Scene {
 		}
 	}
 
+	//////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////
+	// Sequencer
+
+	sequencerClock() {
+
+		setTimeout(() => this.sequencerClock(), this.sequencerClockTime);
+	}
+
+
+	//////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////
+	// Rendering
+
 	getCameraPosition() {
 		const position = new THREE.Vector3();
 		position.setFromMatrixPosition(this.camera.matrixWorld);
@@ -324,9 +346,6 @@ class Scene {
 		return quaternion;
 	}
 
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Rendering
 	update() {
 		// update player movement
 		this.player.position.copy(this.getCameraPosition());
@@ -354,7 +373,6 @@ class Scene {
 				this.noteIdsToPlay.push(this.notes[i].name);
 			}
 		}
-		console.log(this.noteIdsToPlay);
 
 		// render
 		this.renderer.render(this.scene, this.camera);
