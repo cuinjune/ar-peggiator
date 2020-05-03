@@ -54,7 +54,7 @@ app.post("/api/data/notes", (req, res) => {
 
 // edit the existing note
 app.put("/api/data/notes/:id", (req, res) => {
-  const index = data.notes.findIndex(obj => obj.id === req.params.id);
+  const index = data.notes.findIndex(note => note.id === req.params.id);
   if (index != -1) {
     data.notes[index] = { id: req.params.id, color: req.body.color, position: req.body.position };
   }
@@ -63,7 +63,7 @@ app.put("/api/data/notes/:id", (req, res) => {
 
 // delete a note from data
 app.delete("/api/data/notes/:id", (req, res) => {
-  const index = data.notes.findIndex(obj => obj.id === req.params.id);
+  const index = data.notes.findIndex(note => note.id === req.params.id);
   if (index != -1) {
     data.notes.splice(index, 1);
   }
