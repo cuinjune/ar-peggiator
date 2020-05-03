@@ -85,8 +85,11 @@ class Scene {
 		// add preview note
 		this.addPreviewNote();
 
-		// add notes array
+		// notes array to be copied from server notes
 		this.notes = [];
+
+		// array of note ids in string for a sequencer to play (stored in play order)
+		this.noteIdsToPlay = [];
 
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
@@ -203,6 +206,7 @@ class Scene {
 		for (let i = 0; i < _notes.length; i++) {
 			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().fromArray(_notes[i].color) }));
 			this.notes[i].position.fromArray(_notes[i].position);
+			this.notes[i].name = _notes[i].id; // so we can access the note from sequencer
 			this.scene.add(this.notes[i]);
 		}
 	}
@@ -256,15 +260,15 @@ class Scene {
 		this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
 		const frustum = new THREE.Frustum();
 		frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
-		const indices = []; // indices to remove elements from notes data
+		const ids = []; // array of ids to remove elements from notes data
 		for (let i = 0; i < this.notes.length; i++) {
 			if (frustum.containsPoint(this.notes[i].position)) {
-				indices.push(i);
+				ids.push(this.notes[i].name);
 			}
 		}
-		if (indices.length) {
+		if (ids.length) {
 			// send indices to remove to server to update notes data (calls back updateNotes)
-			socket.emit('eraseNotes', indices);
+			socket.emit('eraseNotes', ids);
 		}
 	}
 
@@ -340,17 +344,17 @@ class Scene {
 			this.previewedNote.scale.lerp(previewedNoteScale, lerpAmount);
 		}
 
-		// // check which objects are in view
-		// this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
-		// const frustum = new THREE.Frustum();
-		// frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
-		// const indices = []; // indices to remove elements from notes data
-		// for (let i = 0; i < this.notes.length; i++) {
-		// 	if (frustum.containsPoint(this.notes[i].position)) {
-		// 		indices.push(i);
-		// 	}
-		// }
-
+		// check which notes are in view
+		this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
+		const frustum = new THREE.Frustum();
+		frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+		this.noteIdsToPlay = [];
+		for (let i = 0; i < this.notes.length; i++) {
+			if (frustum.containsPoint(this.notes[i].position)) {
+				this.noteIdsToPlay.push(this.notes[i].name);
+			}
+		}
+		console.log(this.noteIdsToPlay);
 
 		// render
 		this.renderer.render(this.scene, this.camera);

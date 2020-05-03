@@ -8,6 +8,7 @@ const app = express();
 const http = shouldUseHttps ? null : require('http');
 const https = shouldUseHttps ? require('https') : null;
 const PORT = process.env.PORT || 3000;
+const { v4: uuidv4 } = require('uuid');
 
 // handle data in a nice way
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -47,23 +48,23 @@ app.get("/api/data/notes", async (req, res) => {
 
 // add a note to data
 app.post("/api/data/notes", (req, res) => {
-  data.notes.push({ color: req.body.color, position: req.body.position });
+  data.notes.push({ id: uuidv4(), color: req.body.color, position: req.body.position });
   res.json(data.notes);
 });
 
 // edit the existing note
-app.put("/api/data/notes/:index", (req, res) => {
-  const index = Number(req.params.index);
-  if (data.notes[index]) {
-    data.notes[index] = { color: req.body.color, position: req.body.position };
+app.put("/api/data/notes/:id", (req, res) => {
+  const index = data.notes.findIndex(obj => obj.id === req.params.id);
+  if (index != -1) {
+    data.notes[index] = { id: req.params.id, color: req.body.color, position: req.body.position };
   }
   res.json(data.notes);
 });
 
 // delete a note from data
-app.delete("/api/data/notes/:index", (req, res) => {
-  const index = Number(req.params.index);
-  if (data.notes[index]) {
+app.delete("/api/data/notes/:id", (req, res) => {
+  const index = data.notes.findIndex(obj => obj.id === req.params.id);
+  if (index != -1) {
     data.notes.splice(index, 1);
   }
   res.json(data.notes);
@@ -117,7 +118,7 @@ io.on('connection', client => {
 
   client.on('addNote', (_data) => {
     if (clients[client.id]) {
-      data.notes.push({ color: _data[0], position: _data[1] });
+      data.notes.push({ id: uuidv4(), color: _data[0], position: _data[1] });
 
       // update everyone that notes has been updated
       io.sockets.emit('updateNotes', data.notes);
@@ -126,9 +127,13 @@ io.on('connection', client => {
 
   client.on('eraseNotes', (_data) => {
     if (clients[client.id]) {
-      for (let i = _data.length; i--;) {
-        data.notes.splice(_data[i], 1);
+      for (let i = 0; i < _data.length; i++) {
+        const index = data.notes.map(function (note) { return note.id; }).indexOf(_data[i]);
+        if (index != -1) {
+          data.notes.splice(index, 1);
+        }
       }
+
       // update everyone that notes has been updated
       io.sockets.emit('updateNotes', data.notes);
     }
