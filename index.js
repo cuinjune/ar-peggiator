@@ -111,16 +111,27 @@ io.on('connection', client => {
     if (clients[client.id]) {
       clients[client.id].position = _data[0];
       clients[client.id].quaternion = _data[1];
+      client.emit('userMoves', clients); // send back to the sender
     }
-    client.emit('userMoves', clients); // send back to the sender
   });
 
   client.on('addNote', (_data) => {
     if (clients[client.id]) {
       data.notes.push({ color: _data[0], position: _data[1] });
+
+      // update everyone that notes has been updated
+      io.sockets.emit('updateNotes', data.notes);
     }
-    // update everyone that notes has been updated
-    io.sockets.emit('updateNotes', data.notes);
+  });
+
+  client.on('eraseNotes', (_data) => {
+    if (clients[client.id]) {
+      for (let i = _data.length; i--;) {
+        data.notes.splice(_data[i], 1);
+      }
+      // update everyone that notes has been updated
+      io.sockets.emit('updateNotes', data.notes);
+    }
   });
 
   // handle the disconnection

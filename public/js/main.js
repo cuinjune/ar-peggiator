@@ -254,7 +254,8 @@ class Scene {
 	}
 
 	eraseNotes() {
-		console.log("eraseNotes");
+		// send indices to remove to server to update notes data (calls back updateNotes)
+		socket.emit('eraseNotes', []);
 	}
 
 	onSelectStart() {
@@ -333,7 +334,6 @@ class Scene {
 		// render
 		this.renderer.render(this.scene, this.camera);
 	}
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
