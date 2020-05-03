@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 import * as THREE from 'https://threejs.org/build/three.module.js';
-import { ARButton } from 'https://threejs.org/examples/jsm/webxr/ARButton.js';
+import { ARButton } from './arbutton.js';
 
 ////////////////////////////////////////////////////////////////////////////////
 // global variables
@@ -324,10 +324,12 @@ class Scene {
 	//////////////////////////////////////////////////////////////////////
 	// Rendering
 	update() {
-
 		// update player movement
 		this.player.position.copy(this.getCameraPosition());
 		this.player.quaternion.copy(this.getCameraQuaternion());
+
+		// send movement to server to update clients data (calls back updateClientMoves)
+		socket.emit('move', this.getPlayerMove());
 
 		// update previewed note movement
 		if (this.isNotePreviewed) {
@@ -338,8 +340,17 @@ class Scene {
 			this.previewedNote.scale.lerp(previewedNoteScale, lerpAmount);
 		}
 
-		// send movement to server to update clients data (calls back updateClientMoves)
-		socket.emit('move', this.getPlayerMove());
+		// // check which objects are in view
+		// this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
+		// const frustum = new THREE.Frustum();
+		// frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+		// const indices = []; // indices to remove elements from notes data
+		// for (let i = 0; i < this.notes.length; i++) {
+		// 	if (frustum.containsPoint(this.notes[i].position)) {
+		// 		indices.push(i);
+		// 	}
+		// }
+
 
 		// render
 		this.renderer.render(this.scene, this.camera);
