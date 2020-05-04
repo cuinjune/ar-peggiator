@@ -43,9 +43,9 @@ class Scene {
 		this.scene.add(this.camera);
 
 		// light
-		const light = new THREE.HemisphereLight(0xffffff, 0x000000, 1);
-		light.position.set(0.5, 1, 0.25);
-		this.scene.add(light);
+		this.light = new THREE.HemisphereLight(0xffffff, 0x404040, 1);
+		this.light.position.set(0, 2, 0);
+		this.scene.add(this.light);
 
 		// renderer
 		this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -77,8 +77,11 @@ class Scene {
 		// color used for note and player eye (will be updated later from server)
 		this.hue = 0;
 		this.saturation = 1;
-		this.lightness = 0.75;
+		this.lightness = 0.7;
+
+		// used for animating the playing note
 		this.lightnessHighlighted = 0.95;
+		this.scaleHighlighted = 1.05;
 		this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
 
 		// other properties and settings
@@ -89,9 +92,9 @@ class Scene {
 		this.previewNoteOpacity = 0.75;
 		this.clientMoveLerpAmount = 0.2;
 		this.previewedNoteLerpAmount = 0.5;
-		this.noteToPlayColorLerpAmount = 0.2;
+		this.noteToPlayLerpAmount = 0.2;
 		this.maxDoubleTapTime = 250;
-		this.sequencerBpm = 30;
+		this.sequencerBpm = 120;
 		this.minNotePositionY = -1; // below this will be muted
 		this.maxNotePositionY = 1 // above this will be muted
 		this.minNoteDistance = 0.02 // notes this close will produce maximum loudness
@@ -139,8 +142,8 @@ class Scene {
 		// array of note ids in string for a sequencer to play (stored in reverse play order)
 		this.noteToPlayIds = [];
 
-		// array of {color: pointer to the playing color, hue: hue value of the playing color} stored with note id as a key
-		this.noteToPlayColors = {};
+		// array of pointer to the playing notes stored with note id as a key
+		this.notesToPlay = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
 		this.sequencerClockTime = 15000 / this.sequencerBpm; // 16th-note milliseconds
@@ -374,17 +377,17 @@ class Scene {
 			noteToPlay = this.scene.getObjectByName(noteToPlayId);
 		}
 		if (noteToPlay) {
-			const noteToPlayColor = noteToPlay.material.color;
 			const hsl = { h: 0, s: 0, l: 0 };
-			noteToPlayColor.getHSL(hsl);
-			noteToPlayColor.setHSL(hsl.h, hsl.s, this.lightnessHighlighted);
-			this.noteToPlayColors[noteToPlayId] = noteToPlayColor; // store pointer to this color
+			noteToPlay.material.color.getHSL(hsl);
+			noteToPlay.material.color.setHSL(hsl.h, hsl.s, this.lightnessHighlighted);
+			noteToPlay.scale.set(this.scaleHighlighted, this.scaleHighlighted, this.scaleHighlighted);
+			this.notesToPlay[noteToPlayId] = noteToPlay; // store pointer to this note
 			const notePositionY = noteToPlay.position.y;
 			if (notePositionY >= this.minNotePositionY && notePositionY <= this.maxNotePositionY) {
 				const notePositionYNormalized = this.normalize(notePositionY, this.minNotePositionY, this.maxNotePositionY);
 				const midiNoteMapIndex = Math.min(Math.floor(notePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
 				const noteDistance = noteToPlay.position.distanceTo(this.getCameraPosition());
-				const noteDistanceNormalized = this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance);
+				const noteDistanceNormalized = Math.pow(this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance), 4);
 				if (Module.sendBang) { // check if emscripten module is ready
 					// sending a note, velocity pair to pd
 					Module.startMessage(2);
@@ -446,23 +449,24 @@ class Scene {
 			}
 		}
 
-		// for animating playing note colors back to original
-		for (const noteToPlayId in this.noteToPlayColors) {
-			const noteToPlayColor = this.noteToPlayColors[noteToPlayId];
-			if (noteToPlayColor) {
+		// for animating the playing note back to original
+		for (const noteToPlayId in this.notesToPlay) {
+			if (this.notesToPlay[noteToPlayId]) {
 				const hsl = { h: 0, s: 0, l: 0 };
-				noteToPlayColor.getHSL(hsl);
-				// if the color is close enough to original, set to original and remove from array
-				if (Math.abs(hsl.l - this.lightness) < 0.001) {
-					noteToPlayColor.setHSL(hsl.h, hsl.s, this.lightness);
-					delete this.noteToPlayColors[noteToPlayId];
+				this.notesToPlay[noteToPlayId].material.color.getHSL(hsl);
+				// if the note is close enough to original, set to original and remove the note from array
+				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[noteToPlayId].scale.x < 1.001) {
+					this.notesToPlay[noteToPlayId].material.color.setHSL(hsl.h, hsl.s, this.lightness);
+					this.notesToPlay[noteToPlayId].scale.set(1, 1, 1);
+					delete this.notesToPlay[noteToPlayId];
 				}
 				else {
-					noteToPlayColor.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayColorLerpAmount);
+					this.notesToPlay[noteToPlayId].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
+					this.notesToPlay[noteToPlayId].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
 				}
 			}
 			else {
-				delete this.noteToPlayColors[noteToPlayId];
+				delete this.notesToPlay[noteToPlayId];
 			}
 		}
 

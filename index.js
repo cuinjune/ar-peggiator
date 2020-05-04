@@ -136,7 +136,10 @@ io.on('connection', client => {
   client.on('addNote', (_data) => {
     if (clients[client.id]) {
       const _id = uuidv4();
-      data.notes.push({ id: _id, hue: clients[client.id].hue, position: _data });
+      const _position = _data;
+      // apply hue gradation based on y position
+      const _hue = clients[client.id].hue + _position[1] * hueInterval * 0.5;
+      data.notes.push({ id: _id, hue: _hue, position: _position });
       
       // send the added note id to myself
       client.emit('addedNoteID', _id); // send back to the sender
