@@ -91,8 +91,42 @@ class Scene {
 		this.previewedNoteLerpAmount = 0.5;
 		this.noteToPlayColorLerpAmount = 0.2;
 		this.maxDoubleTapTime = 250;
-		const sequencerBpm = 30;
-
+		this.sequencerBpm = 30;
+		this.minNotePositionY = -1; // below this will be muted
+		this.maxNotePositionY = 1 // above this will be muted
+		this.minNoteDistance = 0.02 // notes this close will produce maximum loudness
+		this.maxNoteDistance = 10; // notes farther than this will be silent
+		this.midiNoteMap = [
+			{ value: 36, name: "C2" },
+			{ value: 38, name: "D2" },
+			{ value: 40, name: "E2" },
+			{ value: 41, name: "F2" },
+			{ value: 43, name: "G2" },
+			{ value: 45, name: "A2" },
+			{ value: 47, name: "B2" },
+			{ value: 48, name: "C3" },
+			{ value: 50, name: "D3" },
+			{ value: 52, name: "E3" },
+			{ value: 53, name: "F3" },
+			{ value: 55, name: "G3" },
+			{ value: 57, name: "A3" },
+			{ value: 59, name: "B3" },
+			{ value: 60, name: "C4" },
+			{ value: 62, name: "D4" },
+			{ value: 64, name: "E4" },
+			{ value: 65, name: "F4" },
+			{ value: 67, name: "G4" },
+			{ value: 69, name: "A4" },
+			{ value: 71, name: "B4" },
+			{ value: 72, name: "C4" },
+			{ value: 74, name: "D4" },
+			{ value: 76, name: "E4" },
+			{ value: 77, name: "F4" },
+			{ value: 79, name: "G4" },
+			{ value: 81, name: "A4" },
+			{ value: 83, name: "B4" },
+			{ value: 84, name: "C5" }
+		];
 		// add player
 		this.addSelf();
 
@@ -109,9 +143,8 @@ class Scene {
 		this.noteToPlayColors = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
-		this.sequencerClockTime = 15000 / sequencerBpm; // 16th-note milliseconds
-		const sequencerStartTime = this.sequencerClockTime - (Date.now() % this.sequencerClockTime);
-		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), sequencerStartTime);
+		this.sequencerClockTime = 15000 / this.sequencerBpm; // 16th-note milliseconds
+		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), this.sequencerClockTime - (Date.now() % this.sequencerClockTime));
 
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
@@ -330,9 +363,13 @@ class Scene {
 	// sequencer
 	////////////////////////////////////////////////////////////////////////////////
 
+	normalize(value, min, max) {
+		return (value - min) / (max - min);
+	}
+
 	sequencerClock() {
 		let noteToPlayId = "", noteToPlay = null;
-		while (this.noteToPlayIds.length && !noteToPlay) {
+		while (this.noteToPlayIds.length && !noteToPlay) { // skip unfound note and play the next one
 			noteToPlayId = this.noteToPlayIds.pop();
 			noteToPlay = this.scene.getObjectByName(noteToPlayId);
 		}
@@ -342,6 +379,20 @@ class Scene {
 			noteToPlayColor.getHSL(hsl);
 			noteToPlayColor.setHSL(hsl.h, hsl.s, this.lightnessHighlighted);
 			this.noteToPlayColors[noteToPlayId] = noteToPlayColor; // store pointer to this color
+			const notePositionY = noteToPlay.position.y;
+			if (notePositionY >= this.minNotePositionY && notePositionY <= this.maxNotePositionY) {
+				const notePositionYNormalized = this.normalize(notePositionY, this.minNotePositionY, this.maxNotePositionY);
+				const midiNoteMapIndex = Math.min(Math.floor(notePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
+				const noteDistance = noteToPlay.position.distanceTo(this.getCameraPosition());
+				const noteDistanceNormalized = this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance);
+				if (Module.sendBang) { // check if emscripten module is ready
+					// sending a note, velocity pair to pd
+					Module.startMessage(2);
+					Module.addFloat(this.midiNoteMap[midiNoteMapIndex].value);
+					Module.addFloat(noteDistanceNormalized);
+					Module.finishList("playNote");
+				}
+			}
 		}
 		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), this.sequencerClockTime);
 	}
@@ -485,7 +536,7 @@ function initSocketConnection() {
 		glScene.setHue(_hue);
 	});
 
-	 // send the added note id to myself after adding a note
+	// send the added note id to myself after adding a note
 	socket.on('addedNoteID', _id => {
 		glScene.addedNoteID(_id);
 	});
