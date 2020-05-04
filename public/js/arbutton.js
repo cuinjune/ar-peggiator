@@ -1,7 +1,6 @@
-/**
- * @author mrdoob / http://mrdoob.com
- * @author Mugen87 / https://github.com/Mugen87
- */
+////////////////////////////////////////////////////////////////////////////////
+// AR button: written by http://mrdoob.com and https://github.com/Mugen87
+////////////////////////////////////////////////////////////////////////////////
 
 var ARButton = {
     createButton: function (renderer, sessionInit = {}) {

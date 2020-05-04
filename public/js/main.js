@@ -28,7 +28,6 @@ let glScene;
 
 class Scene {
 	constructor(_width, _height) {
-
 		const container = document.createElement('div');
 		document.body.appendChild(container);
 
@@ -40,7 +39,7 @@ class Scene {
 		this.scene = new THREE.Scene();
 
 		// camera
-		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.025, 100);
+		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.02, 100);
 		this.scene.add(this.camera);
 
 		// light
@@ -75,12 +74,27 @@ class Scene {
 		this.isTouched = false;
 		this.touchedTime = 0;
 
+		// color used for note and player eye (will be updated later from server)
+		this.hue = 0;
+		this.saturation = 1;
+		this.lightness = 0.75;
+		this.lightnessHighlighted = 0.95;
+		this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
+
+		// other properties and settings
+		this.noteRadius = 0.0333;
+		this.radialSegments = 32;
+		this.playerBodyColor = new THREE.Color(0.25, 0.25, 0.25);
+		this.noteGeometry = new THREE.SphereBufferGeometry(this.noteRadius, this.radialSegments, this.radialSegments);
+		this.previewNoteOpacity = 0.75;
+		this.clientMoveLerpAmount = 0.2;
+		this.previewedNoteLerpAmount = 0.5;
+		this.noteToPlayColorLerpAmount = 0.2;
+		this.maxDoubleTapTime = 250;
+		const sequencerBpm = 30;
+
 		// add player
 		this.addSelf();
-
-		// note geometry
-		this.radialSegments = 32;
-		this.noteGeometry = new THREE.SphereBufferGeometry(0.0333, this.radialSegments, this.radialSegments);
 
 		// add preview note
 		this.addPreviewNote();
@@ -88,32 +102,24 @@ class Scene {
 		// notes array to be copied from server notes
 		this.notes = [];
 
-		// array of note ids in string for a sequencer to play (stored in play order)
-		this.noteIdsToPlay = [];
+		// array of note ids in string for a sequencer to play (stored in reverse play order)
+		this.noteToPlayIds = [];
 
-		// sequencer tempo
-		const sequencerBpm = 120;
-		this.sequencerClockTime = 15000 / sequencerBpm; // 16th-note milliseconds
+		// array of {color: pointer to the playing color, hue: hue value of the playing color} stored with note id as a key
+		this.noteToPlayColors = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
+		this.sequencerClockTime = 15000 / sequencerBpm; // 16th-note milliseconds
 		const sequencerStartTime = this.sequencerClockTime - (Date.now() % this.sequencerClockTime);
-		setTimeout(() => this.sequencerClock(), sequencerStartTime);
+		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), sequencerStartTime);
 
 		// start the loop
 		this.renderer.setAnimationLoop(() => this.update());
 	}
 
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Utils
-
-	getRandomRange(from, to) {
-		return Math.random() * (to - from) + from;
-	}
-
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Clients
+	////////////////////////////////////////////////////////////////////////////////
+	// start-up
+	////////////////////////////////////////////////////////////////////////////////
 
 	addPlayer(obj) {
 		// dimension
@@ -130,7 +136,7 @@ class Scene {
 
 		// material
 		const playerEyeMaterial = new THREE.MeshLambertMaterial({ color: obj.color });
-		const playerBodyMaterial = new THREE.MeshLambertMaterial({ color: new THREE.Color(0.25, 0.25, 0.25) });
+		const playerBodyMaterial = new THREE.MeshLambertMaterial({ color: this.playerBodyColor });
 
 		// mesh
 		obj.playerEye = new THREE.Mesh(playerEyeGeometry, playerEyeMaterial);
@@ -153,52 +159,52 @@ class Scene {
 	}
 
 	addSelf() {
-		this.color = new THREE.Color(0.5, 0.5, 0.5);
 		this.addPlayer(this);
 	}
 
 	addPreviewNote() {
-		const material = new THREE.MeshPhongMaterial({ color: this.color, transparent: true, opacity: 0.75 });
+		const material = new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(this.hue, this.saturation, this.lightness), transparent: true, opacity: this.previewNoteOpacity });
 		this.previewedNote = new THREE.Mesh(this.noteGeometry, material);
 		this.previewedNote.scale.set(0, 0, 0);
 		this.previewedNote.visible = false;
+		this.previewedNote.name = "previewNote";
 		this.scene.add(this.previewedNote);
 	}
 
-	setPlayerLook(_id) {
-		Math.seedrandom(_id);
-		const colorR = this.getRandomRange(0.5, 1);
-		const colorG = this.getRandomRange(0.5, 1);
-		const colorB = this.getRandomRange(0.5, 1);
-		this.color = new THREE.Color(colorR, colorG, colorB);
-		this.playerEye.material.color.set(this.color);
-		this.previewedNote.material.color.set(this.color);
-	}
+	////////////////////////////////////////////////////////////////////////////////
+	// from server
+	////////////////////////////////////////////////////////////////////////////////
 
 	addClient(_clientProp, _id) {
 		const obj = {
-			color: new THREE.Color().fromArray(_clientProp.color)
+			color: new THREE.Color().setHSL(_clientProp.hue, this.saturation, this.lightness)
 		};
 		this.addPlayer(obj);
 		clients[_id].player = obj.player;
 	}
 
-	removeClient(_id) {
-		// remove player from scene
-		if (clients[_id]) {
-			this.scene.remove(clients[_id].player);
-		}
-	}
-
 	updateClientMoves(_clientProps) {
 		for (let _id in _clientProps) {
 			if (_id != id && clients[_id]) {
-				const lerpAmount = 0.2;
 				const playerPosition = new THREE.Vector3().fromArray(_clientProps[_id].position);
 				const playerQuaternion = new THREE.Quaternion().fromArray(_clientProps[_id].quaternion);
-				clients[_id].player.position.lerp(playerPosition, lerpAmount);
-				clients[_id].player.quaternion.slerp(playerQuaternion, lerpAmount);
+				clients[_id].player.position.lerp(playerPosition, this.clientMoveLerpAmount);
+				clients[_id].player.quaternion.slerp(playerQuaternion, this.clientMoveLerpAmount);
 			}
+		}
+	}
+
+	setHue(_hue) {
+		this.hue = _hue;
+		this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
+		this.playerEye.material.color.set(this.color);
+		this.previewedNote.material.color.set(this.color);
+	}
+
+	addedNoteID(_id) {
+		// replace id of the last note to be played which is a preview note with the added note 
+		if (this.noteToPlayIds.length) {
+			this.noteToPlayIds[0] = _id;
 		}
 	}
 
@@ -212,19 +218,23 @@ class Scene {
 
 		// add new notes to scene
 		for (let i = 0; i < _notes.length; i++) {
-			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().fromArray(_notes[i].color) }));
+			this.notes[i] = new THREE.Mesh(this.noteGeometry, new THREE.MeshPhongMaterial({ color: new THREE.Color().setHSL(_notes[i].hue, this.saturation, this.lightness) }));
 			this.notes[i].position.fromArray(_notes[i].position);
 			this.notes[i].name = _notes[i].id; // so we can access the note from sequencer
 			this.scene.add(this.notes[i]);
 		}
 	}
 
-	// data to send to the server
-	getPlayerLook() {
-		return [
-			[this.color.r, this.color.g, this.color.b]
-		];
+	removeClient(_id) {
+		// remove player from scene
+		if (clients[_id]) {
+			this.scene.remove(clients[_id].player);
+		}
 	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	// to server
+	////////////////////////////////////////////////////////////////////////////////
 
 	getPlayerMove() {
 		return [
@@ -233,18 +243,14 @@ class Scene {
 		];
 	}
 
-	getNote() {
-		return [
-			[this.color.r, this.color.g, this.color.b],
-			[this.previewedNote.position.x, this.previewedNote.position.y, this.previewedNote.position.z]
-		];
+	getNotePosition() {
+		return [this.previewedNote.position.x, this.previewedNote.position.y, this.previewedNote.position.z];
 	}
 
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Interaction
+	////////////////////////////////////////////////////////////////////////////////
+	// interaction
+	////////////////////////////////////////////////////////////////////////////////
 
-	// called when window is resized
 	windowResized() {
 		this.width = window.innerWidth;
 		this.height = window.innerHeight;
@@ -257,11 +263,12 @@ class Scene {
 		this.isNotePreviewed = true;
 		this.previewedNote.visible = true;
 		this.previewedNote.position.set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+		this.noteToPlayIds.unshift(this.previewedNote.name); //prepend the preview note to be played lastly
 	}
 
 	addNote() {
-		// send note to server to update notes data (calls back updateNotes)
-		socket.emit('addNote', this.getNote());
+		// send note position to server (calls back updateNotes)
+		socket.emit('addNote', this.getNotePosition());
 	}
 
 	eraseNotes() {
@@ -275,14 +282,13 @@ class Scene {
 			}
 		}
 		if (ids.length) {
-			// send indices to remove to server to update notes data (calls back updateNotes)
+			// send indices to remove to server (calls back updateNotes)
 			socket.emit('eraseNotes', ids);
 		}
 	}
 
 	onSelectStart() {
 		const time = Date.now();
-		this.maxDoubleTapTime = 250;
 
 		// if double tapped, erase notes
 		if (time - this.touchedTime <= this.maxDoubleTapTime) {
@@ -320,19 +326,29 @@ class Scene {
 		}
 	}
 
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Sequencer
+	////////////////////////////////////////////////////////////////////////////////
+	// sequencer
+	////////////////////////////////////////////////////////////////////////////////
 
 	sequencerClock() {
-
-		setTimeout(() => this.sequencerClock(), this.sequencerClockTime);
+		let noteToPlayId = "", noteToPlay = null;
+		while (this.noteToPlayIds.length && !noteToPlay) {
+			noteToPlayId = this.noteToPlayIds.pop();
+			noteToPlay = this.scene.getObjectByName(noteToPlayId);
+		}
+		if (noteToPlay) {
+			const noteToPlayColor = noteToPlay.material.color;
+			const hsl = { h: 0, s: 0, l: 0 };
+			noteToPlayColor.getHSL(hsl);
+			noteToPlayColor.setHSL(hsl.h, hsl.s, this.lightnessHighlighted);
+			this.noteToPlayColors[noteToPlayId] = noteToPlayColor; // store pointer to this color
+		}
+		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), this.sequencerClockTime);
 	}
 
-
-	//////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////
-	// Rendering
+	////////////////////////////////////////////////////////////////////////////////
+	// rendering
+	////////////////////////////////////////////////////////////////////////////////
 
 	getCameraPosition() {
 		const position = new THREE.Vector3();
@@ -351,26 +367,51 @@ class Scene {
 		this.player.position.copy(this.getCameraPosition());
 		this.player.quaternion.copy(this.getCameraQuaternion());
 
-		// send movement to server to update clients data (calls back updateClientMoves)
-		socket.emit('move', this.getPlayerMove());
+		// send player movement to server (calls back updateClientMoves)
+		socket.emit('playerMoved', this.getPlayerMove());
 
 		// update previewed note movement
 		if (this.isNotePreviewed) {
-			const lerpAmount = 0.5;
 			const previewedNotePosition = new THREE.Vector3().set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
 			const previewedNoteScale = new THREE.Vector3(1, 1, 1);
-			this.previewedNote.position.lerp(previewedNotePosition, lerpAmount);
-			this.previewedNote.scale.lerp(previewedNoteScale, lerpAmount);
+			this.previewedNote.position.lerp(previewedNotePosition, this.previewedNoteLerpAmount);
+			this.previewedNote.scale.lerp(previewedNoteScale, this.previewedNoteLerpAmount);
 		}
 
-		// check which notes are in view
-		this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
-		const frustum = new THREE.Frustum();
-		frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
-		this.noteIdsToPlay = [];
-		for (let i = 0; i < this.notes.length; i++) {
-			if (frustum.containsPoint(this.notes[i].position)) {
-				this.noteIdsToPlay.push(this.notes[i].name);
+		// if there's no more note left to play, check which notes are in camera view and store new notes to play
+		if (this.noteToPlayIds.length == 0) {
+			// if the user is currently previewing a note, push its name to the ids array (it will be played lastly) 
+			if (this.isNotePreviewed) {
+				this.noteToPlayIds.push(this.previewedNote.name);
+			}
+			this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
+			const frustum = new THREE.Frustum();
+			frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+			for (let i = this.notes.length; i--;) {
+				if (frustum.containsPoint(this.notes[i].position)) {
+					// stored in reverse play order (first element will be played lastly)
+					this.noteToPlayIds.push(this.notes[i].name);
+				}
+			}
+		}
+
+		// for animating playing note colors back to original
+		for (const noteToPlayId in this.noteToPlayColors) {
+			const noteToPlayColor = this.noteToPlayColors[noteToPlayId];
+			if (noteToPlayColor) {
+				const hsl = { h: 0, s: 0, l: 0 };
+				noteToPlayColor.getHSL(hsl);
+				// if the color is close enough to original, set to original and remove from array
+				if (Math.abs(hsl.l - this.lightness) < 0.001) {
+					noteToPlayColor.setHSL(hsl.h, hsl.s, this.lightness);
+					delete this.noteToPlayColors[noteToPlayId];
+				}
+				else {
+					noteToPlayColor.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayColorLerpAmount);
+				}
+			}
+			else {
+				delete this.noteToPlayColors[noteToPlayId];
 			}
 		}
 
@@ -408,12 +449,6 @@ function initSocketConnection() {
 		console.log('My socket ID is: ' + _id);
 		id = _id;
 
-		// set player look
-		glScene.setPlayerLook(id);
-
-		// upload player look to server
-		socket.emit('look', glScene.getPlayerLook());
-
 		// for each existing user, add them as a client
 		for (let i = 0; i < _ids.length; i++) {
 			if (_ids[i] != id) { // add all existing clients except for myself
@@ -438,20 +473,31 @@ function initSocketConnection() {
 		}
 	});
 
+	// when a user has been disconnected from the server
 	socket.on('userDisconnected', (_id) => {
 		if (_id != id) {
 			removeClient(_id);
 		}
 	});
 
-	// update when one of the users moves in space
-	socket.on('userMoves', _clientProps => {
-		glScene.updateClientMoves(_clientProps);
+	// set hue value in the start-up
+	socket.on('setHue', _hue => {
+		glScene.setHue(_hue);
 	});
 
-	// update when there is change to notes data
+	 // send the added note id to myself after adding a note
+	socket.on('addedNoteID', _id => {
+		glScene.addedNoteID(_id);
+	});
+
+	// update when there is any change to notes data
 	socket.on('updateNotes', _notes => {
 		glScene.updateNotes(_notes);
+	});
+
+	// update when one of the users moves in space
+	socket.on('updateClientMoves', _clientProps => {
+		glScene.updateClientMoves(_clientProps);
 	});
 }
 
