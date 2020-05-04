@@ -1,4 +1,4 @@
-#N canvas 326 48 603 736 12;
+#N canvas 69 55 603 736 12;
 #X obj 194 621 dac~ 1 2;
 #X obj 214 301 osc~;
 #X obj 168 302 osc~;
@@ -17,10 +17,8 @@
 #X msg 360 91 84 1;
 #X obj 188 424 lop~ 5000;
 #X obj 213 264 *~ 2;
-#X obj 386 135 r filterCutoff;
-#X text 395 162 should lerp in js;
-#X text 396 243 should lerp in js;
-#X obj 387 216 r ampDecay;
+#X obj 386 135 r cutoff;
+#X obj 460 135 r decay;
 #X connect 1 0 14 0;
 #X connect 2 0 16 0;
 #X connect 3 0 4 0;

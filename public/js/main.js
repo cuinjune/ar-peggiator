@@ -79,6 +79,10 @@ class Scene {
 		this.saturation = 1;
 		this.lightness = 0.7;
 
+		// used for linear interpolating the player rotation (for sending to pd)
+		this.playerRotation = new THREE.Vector3(0, 0, 0);
+		this.playerRotationLerpAmount = 0.2;
+
 		// used for animating the playing note
 		this.lightnessHighlighted = 0.95;
 		this.scaleHighlighted = 1.05;
@@ -363,12 +367,17 @@ class Scene {
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
-	// sequencer
+	// untility
 	////////////////////////////////////////////////////////////////////////////////
 
 	normalize(value, min, max) {
 		return (value - min) / (max - min);
 	}
+
+
+	////////////////////////////////////////////////////////////////////////////////
+	// sequencer
+	////////////////////////////////////////////////////////////////////////////////
 
 	sequencerClock() {
 		let noteToPlayId = "", noteToPlay = null;
@@ -423,6 +432,14 @@ class Scene {
 
 		// send player movement to server (calls back updateClientMoves)
 		socket.emit('playerMoved', this.getPlayerMove());
+
+		// used for sending linear interpolated rotation values to pd
+		this.playerRotation.lerp(this.player.rotation, this.playerRotationLerpAmount);
+		if (Module.sendBang) { // check if emscripten module is ready
+			const halfPI = Math.PI * 0.5;
+			Module.sendFloat("cutoff", this.normalize(this.playerRotation.x, -halfPI, halfPI));
+			Module.sendFloat("decay", this.normalize(this.playerRotation.z, halfPI, -halfPI));
+		}
 
 		// update previewed note movement
 		if (this.isNotePreviewed) {
