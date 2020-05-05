@@ -1,4 +1,6 @@
 # ARpeggiator
+<img src="screenshot.jpg" alt="Screenshot" width="250"/>
+
 ARpeggiator is a collaborative AR music making application. (Works in Chrome on Android devices)
 
 Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
