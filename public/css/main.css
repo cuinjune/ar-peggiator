@@ -2,8 +2,8 @@ body {
 	margin: 0;
 	background-color: #000;
 	color: #fff;
-	font-family: Monospace;
-	font-size: 13px;
+	font-family: Helvetica, sans-serif;
+	font-size: 18px;
 	line-height: 24px;
 	overscroll-behavior: none;
 }
@@ -30,6 +30,7 @@ canvas {
 	position: absolute;
 	top: 0px;
 	width: 100%;
+	height: 100%;
 	padding: 10px;
 	box-sizing: border-box;
 	text-align: center;
@@ -39,6 +40,20 @@ canvas {
 	user-select: none;
 	pointer-events: none;
 	z-index: 1; /* TODO Solve this in HTML */
+	background-image: linear-gradient(to right bottom, #d16ba5, #c777b9, #ba83ca, #aa8fd8, #9a9ae1, #80abee, #67bbf3, #59c9f0, #62dde4, #8fedd0, #c7f8bf, #ffffbb);
+}
+
+#instruction {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-around;
+	align-items: center;
+	text-align: left;
+	line-height: 2em;
+	font-weight: bold;
+	margin-top: 5em;
+	width: 100%;
+	height: 30%;
 }
 
 a, button, input, select {

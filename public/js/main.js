@@ -11,8 +11,8 @@ import { Gimbal } from './gimbal.js';
 ////////////////////////////////////////////////////////////////////////////////
 
 // detect mobile device or not
-const isMobile = (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
-
+// const isMobile = (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+const isMobile = true;
 // socket.io
 let socket;
 let id; //my socket id
