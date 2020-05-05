@@ -70,8 +70,7 @@ class Scene {
 			this.controller.addEventListener('select', () => this.onSelect());
 			this.controller.addEventListener('selectend', () => this.onSelectEnd());
 			this.scene.add(this.controller);
-
-			// listens to device orientation changes
+			// for getting the device hardware rotation
 			this.gimbal = new Gimbal();
 			this.gimbal.enable();
 		}
@@ -144,6 +143,11 @@ class Scene {
 		// add preview note
 		this.addPreviewNote();
 
+		// add note texts
+		this.noteTexts = [];
+		const fontLoader = new THREE.FontLoader();
+		fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => this.addNoteTexts(font));
+
 		// notes array to be copied from server notes
 		this.notes = [];
 
@@ -154,7 +158,7 @@ class Scene {
 		this.notesToPlay = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
-		this.sequencerClockTime = 174;
+		this.sequencerClockTime = 174; // this should be changed with the pd patch's delay tempo
 		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), this.sequencerClockTime - (Date.now() % this.sequencerClockTime));
 
 		// start the loop
@@ -213,6 +217,30 @@ class Scene {
 		this.previewedNote.visible = false;
 		this.previewedNote.name = "previewNote";
 		this.scene.add(this.previewedNote);
+	}
+
+	addNoteTexts(font) {
+		const textMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+		for (let i = 0; i < this.midiNoteMap.length; i++) {
+			const textGeometry = new THREE.TextGeometry(this.midiNoteMap[i].name, {
+				font: font,
+				size: 0.008,
+				height: 0.004,
+				curveSegments: 12,
+				bevelEnabled: false,
+				bevelThickness: 10,
+				bevelSize: 8,
+				bevelOffset: 0,
+				bevelSegments: 3
+			});
+			textGeometry.center();
+			const noteText = new THREE.Mesh(textGeometry, textMaterial);
+			noteText.position.set(0, 0.05, -0.1);
+			noteText.rotation.x = THREE.Math.degToRad(15);
+			noteText.visible = false;
+			this.noteTexts.push(noteText);
+			this.camera.add(noteText); // adding to camera so these can be seen relative to camera
+		}
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -367,6 +395,13 @@ class Scene {
 			this.isNotePreviewed = false;
 			this.previewedNote.visible = false;
 			this.previewedNote.scale.set(0, 0, 0);
+
+			// make note texts invisible
+			for (let i = 0; i < this.noteTexts.length; i++) {
+				if (this.noteTexts[i].visible) {
+					this.noteTexts[i].visible = false;
+				}
+			}
 		}
 	}
 
@@ -374,10 +409,21 @@ class Scene {
 	// untility
 	////////////////////////////////////////////////////////////////////////////////
 
+	getCameraPosition() {
+		const position = new THREE.Vector3();
+		position.setFromMatrixPosition(this.camera.matrixWorld);
+		return position;
+	}
+
+	getCameraQuaternion() {
+		const quaternion = new THREE.Quaternion();
+		quaternion.setFromRotationMatrix(this.camera.matrixWorld);
+		return quaternion;
+	}
+
 	normalize(value, min, max) {
 		return (value - min) / (max - min);
 	}
-
 
 	////////////////////////////////////////////////////////////////////////////////
 	// sequencer
@@ -393,7 +439,9 @@ class Scene {
 			const hsl = { h: 0, s: 0, l: 0 };
 			noteToPlay.material.color.getHSL(hsl);
 			noteToPlay.material.color.setHSL(hsl.h, hsl.s, this.lightnessHighlighted);
-			noteToPlay.scale.set(this.scaleHighlighted, this.scaleHighlighted, this.scaleHighlighted);
+			if (noteToPlay.scale.x >= 1) { // ignore the previewed note which starts from scale 0 to 1
+				noteToPlay.scale.set(this.scaleHighlighted, this.scaleHighlighted, this.scaleHighlighted);
+			}
 			this.notesToPlay[noteToPlayId] = noteToPlay; // store pointer to this note
 			const notePositionY = noteToPlay.position.y;
 			if (notePositionY >= this.minNotePositionY && notePositionY <= this.maxNotePositionY) {
@@ -416,18 +464,6 @@ class Scene {
 	////////////////////////////////////////////////////////////////////////////////
 	// rendering
 	////////////////////////////////////////////////////////////////////////////////
-
-	getCameraPosition() {
-		const position = new THREE.Vector3();
-		position.setFromMatrixPosition(this.camera.matrixWorld);
-		return position;
-	}
-
-	getCameraQuaternion() {
-		const quaternion = new THREE.Quaternion();
-		quaternion.setFromRotationMatrix(this.camera.matrixWorld);
-		return quaternion;
-	}
 
 	update() {
 		// update player movement
@@ -457,6 +493,19 @@ class Scene {
 			const previewedNoteScale = new THREE.Vector3(1, 1, 1);
 			this.previewedNote.position.lerp(previewedNotePosition, this.previewedNoteLerpAmount);
 			this.previewedNote.scale.lerp(previewedNoteScale, this.previewedNoteLerpAmount);
+			// display the note text
+			const previewedNotePositionY = this.previewedNote.position.y;
+			if (previewedNotePositionY >= this.minNotePositionY && previewedNotePositionY <= this.maxNotePositionY) {
+				const previewedNotePositionYNormalized = this.normalize(previewedNotePositionY, this.minNotePositionY, this.maxNotePositionY);
+				const midiNoteMapIndex = Math.min(Math.floor(previewedNotePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
+				for (let i = 0; i < this.noteTexts.length; i++) {
+					if (this.noteTexts[i].visible) {
+						this.noteTexts[i].visible = false;
+					}
+				}
+				this.noteTexts[midiNoteMapIndex].scale.copy(this.previewedNote.scale);
+				this.noteTexts[midiNoteMapIndex].visible = true;
+			}
 		}
 
 		// if there's no more note left to play, check which notes are in camera view and store new notes to play
@@ -484,12 +533,16 @@ class Scene {
 				// if the note is close enough to original, set to original and remove the note from array
 				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[noteToPlayId].scale.x < 1.001) {
 					this.notesToPlay[noteToPlayId].material.color.setHSL(hsl.h, hsl.s, this.lightness);
-					this.notesToPlay[noteToPlayId].scale.set(1, 1, 1);
+					if (this.notesToPlay[noteToPlayId].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[noteToPlayId].scale.set(1, 1, 1);
+					}
 					delete this.notesToPlay[noteToPlayId];
 				}
 				else {
 					this.notesToPlay[noteToPlayId].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
-					this.notesToPlay[noteToPlayId].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
+					if (this.notesToPlay[noteToPlayId].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[noteToPlayId].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
+					}
 				}
 			}
 			else {
