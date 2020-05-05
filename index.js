@@ -11,7 +11,7 @@ const data = JSON.parse(fs.readFileSync('db/data.json'));
 const app = express();
 const http = shouldUseHttps ? null : require('http');
 const https = shouldUseHttps ? require('https') : null;
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 3000;
 const { v4: uuidv4 } = require('uuid');
 
 // handle data in a nice way
