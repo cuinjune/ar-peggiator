@@ -4,4 +4,4 @@ libpd
 # ignore weird mac files
 .DS_Store
 # ignore the .pem files
-*.pem
+# *.pem
