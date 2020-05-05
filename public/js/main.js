@@ -4,6 +4,7 @@
 
 import * as THREE from 'https://threejs.org/build/three.module.js';
 import { ARButton } from './arbutton.js';
+import { Gimbal } from './gimbal.js';
 
 ////////////////////////////////////////////////////////////////////////////////
 // global variables
@@ -69,6 +70,10 @@ class Scene {
 			this.controller.addEventListener('select', () => this.onSelect());
 			this.controller.addEventListener('selectend', () => this.onSelectEnd());
 			this.scene.add(this.controller);
+
+			// listens to device orientation changes
+			this.gimbal = new Gimbal();
+			this.gimbal.enable();
 		}
 		// touch state
 		this.isTouched = false;
@@ -77,14 +82,14 @@ class Scene {
 		// color used for note and player eye (will be updated later from server)
 		this.hue = 0;
 		this.saturation = 1;
-		this.lightness = 0.7;
+		this.lightness = 0.65;
 
 		// used for linear interpolating the player rotation (for sending to pd)
 		this.playerRotation = new THREE.Vector3(0, 0, 0);
-		this.playerRotationLerpAmount = 0.2;
+		this.playerRotationLerpAmount = 0.5;
 
 		// used for animating the playing note
-		this.lightnessHighlighted = 0.95;
+		this.lightnessHighlighted = 0.9;
 		this.scaleHighlighted = 1.05;
 		this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
 
@@ -98,7 +103,6 @@ class Scene {
 		this.previewedNoteLerpAmount = 0.5;
 		this.noteToPlayLerpAmount = 0.2;
 		this.maxDoubleTapTime = 250;
-		this.sequencerBpm = 120;
 		this.minNotePositionY = -1; // below this will be muted
 		this.maxNotePositionY = 1 // above this will be muted
 		this.minNoteDistance = 0.02 // notes this close will produce maximum loudness
@@ -150,7 +154,7 @@ class Scene {
 		this.notesToPlay = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
-		this.sequencerClockTime = 15000 / this.sequencerBpm; // 16th-note milliseconds
+		this.sequencerClockTime = 174;
 		this.sequencerClockTimer = setTimeout(() => this.sequencerClock(), this.sequencerClockTime - (Date.now() % this.sequencerClockTime));
 
 		// start the loop
@@ -402,7 +406,7 @@ class Scene {
 					Module.startMessage(2);
 					Module.addFloat(this.midiNoteMap[midiNoteMapIndex].value);
 					Module.addFloat(noteDistanceNormalized);
-					Module.finishList("playNote");
+					Module.finishList("note");
 				}
 			}
 		}
@@ -433,12 +437,18 @@ class Scene {
 		// send player movement to server (calls back updateClientMoves)
 		socket.emit('playerMoved', this.getPlayerMove());
 
-		// used for sending linear interpolated rotation values to pd
-		this.playerRotation.lerp(this.player.rotation, this.playerRotationLerpAmount);
 		if (Module.sendBang) { // check if emscripten module is ready
+			if (isMobile) {
+				// let's use the device's hardware rotation which seems to be more stable 
+				this.gimbal.update();
+				this.playerRotation.lerp(new THREE.Vector3(-this.gimbal.pitch, this.gimbal.yaw, -this.gimbal.roll), this.playerRotationLerpAmount);
+			}
+			else {
+				this.playerRotation.lerp(this.player.rotation, this.playerRotationLerpAmount);
+			}
 			const halfPI = Math.PI * 0.5;
-			Module.sendFloat("cutoff", this.normalize(this.playerRotation.x, -halfPI, halfPI));
-			Module.sendFloat("decay", this.normalize(this.playerRotation.z, halfPI, -halfPI));
+			Module.sendFloat("env", this.normalize(this.playerRotation.x, halfPI, -halfPI));
+			Module.sendFloat("dec", this.normalize(this.playerRotation.z, halfPI, -halfPI));
 		}
 
 		// update previewed note movement
