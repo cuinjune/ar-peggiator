@@ -2,7 +2,7 @@
 // server
 ////////////////////////////////////////////////////////////////////////////////
 
-const shouldUseHttps = true;
+const shouldUseHttps = false;
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
