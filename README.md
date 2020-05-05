@@ -5,7 +5,7 @@ ARpeggiator is a collaborative AR music making application. **(Works in Chrome o
 
 Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
 
-## How to play
+## How to use
 * Make sure the sound on your phone is turned on.
 * Touch the [START AR] button to start the app.
 * Touch and hold down on the screen to see the preview note.
