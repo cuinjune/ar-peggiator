@@ -7,10 +7,10 @@ Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
 
 ## How to play
 * Make sure the sound on your phone is turned on.
-* Touch the [AR Start] button to start the app.
+* Touch the [START AR] button to start the app.
 * Touch and hold down on the screen to see the preview note.
 * Release your touch to create a note on the location.
-* Double tap on the screen to clear all notes in the camera view.
+* Double tap on the screen to erase all notes in the camera view.
 * Try tilting your phone to hear the sound changing.
 
 ## Setup
