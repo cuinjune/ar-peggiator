@@ -5,7 +5,7 @@ ARpeggiator is a collaborative AR music-making application. **(Works in Chrome o
 
 Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
 
-<img src="QR.png" alt="QR Code" width="250"/>
+<img src="QR.png" alt="QR Code" width="200"/>
 You can also use this QR code to go to the app link on your Android device.
 
 ## How to use
