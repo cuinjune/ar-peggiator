@@ -7,8 +7,6 @@ The spherical notes created by users will be played in a loop while they are in 
 
 All these features make the app perfectly suitable for live performance as well as a collaborative musical experience.
 
-The app was created with Node.js, Express, Three.js, WebXR, Socket.io, Pure Data, and Emscripten and it is open source on Github: https://github.com/cuinjune/ar-peggiator
-
 Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
 
 <img src="QR.png" alt="QR Code" width="200"/>
