@@ -5,7 +5,7 @@ The ARpeggiator is a collaborative augmented reality (AR) music-making applicati
 
 The spherical notes created by users will be played in a loop while they are in the camera's view. The notes will be played in the order they are created. The vertical position of the note determines the pitch, and the distance between the note and the camera determines the velocity. Tilting the device along the x-axis controls the low-pass filter frequency, while the z-axis controls the decay of notes.
 
-All these features make the app perfectly suitable for live performance as well as collaborative musical experience.
+All these features make the app perfectly suitable for live performance as well as a collaborative musical experience.
 
 The app was created with Node.js, Express, Three.js, WebXR, Socket.io, Pure Data, and Emscripten and it is open source on Github: https://github.com/cuinjune/ar-peggiator
 
