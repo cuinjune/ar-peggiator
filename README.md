@@ -31,7 +31,7 @@ npm start
 3. Open your web browser and navigate to http://localhost:3000
 
 ## Tools & Libraries used
-webxr, three.js, pure data, emscripten, node.js, express, socket.io, uuid
+WebXR, Three.js, Pure Data, Emscripten, Node.js, Express, Socket.io, uuid
 
 ## References
 * https://threejs.org/examples/webxr_ar_cones.html
