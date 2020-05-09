@@ -1,7 +1,13 @@
 # ARpeggiator
 <img src="screenshot.jpg" alt="Screenshot" width="250"/>
 
-ARpeggiator is a collaborative AR music-making application. **(Works in Chrome on Android devices only)**
+The ARpeggiator is a collaborative augmented reality (AR) music-making application that works in Chrome on Android devices allowing multiple users to make music together in real-time by creating spherical notes in AR space.
+
+The spherical notes created by users will be played in a loop while they are in the camera's view. The notes will be played in the order they are created and the vertical position of the note determines the pitch and the distance between the note and the camera determines the velocity. And tilting the device along the x-axis controls the low-pass filter frequency while the z-axis controls the decay of notes.
+
+All these features make the app perfectly suitable for a live performance as well as providing collaborative and shared musical experience.
+
+The app was created with Node.js, Express, Three.js, WebXR, Socket.io, Pure Data, and Emscripten and it is open source on Github: https://github.com/cuinjune/ar-peggiator
 
 Here's the [Live Demo on Heroku](https://ar-peggiator.herokuapp.com/).
 
