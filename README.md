@@ -1,5 +1,5 @@
 # ARpeggiator
-<img src="screenshot.jpg" alt="Screenshot" width="250"/>
+<img src="screenshot.png" alt="Screenshot" width="700"/>
 
 The ARpeggiator is a collaborative augmented reality (AR) music-making application that works in **Chrome on Android devices** allowing multiple users to make music together in real-time by creating spherical notes in AR space.
 
