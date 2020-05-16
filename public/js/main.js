@@ -128,14 +128,14 @@ class Scene {
 			{ value: 67, name: "G4" },
 			{ value: 69, name: "A4" },
 			{ value: 71, name: "B4" },
-			{ value: 72, name: "C4" },
-			{ value: 74, name: "D4" },
-			{ value: 76, name: "E4" },
-			{ value: 77, name: "F4" },
-			{ value: 79, name: "G4" },
-			{ value: 81, name: "A4" },
-			{ value: 83, name: "B4" },
-			{ value: 84, name: "C5" }
+			{ value: 72, name: "C5" },
+			{ value: 74, name: "D5" },
+			{ value: 76, name: "E5" },
+			{ value: 77, name: "F5" },
+			{ value: 79, name: "G5" },
+			{ value: 81, name: "A5" },
+			{ value: 83, name: "B5" },
+			{ value: 84, name: "C6" }
 		];
 		// add player
 		this.addSelf();
