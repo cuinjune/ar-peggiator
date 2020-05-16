@@ -448,7 +448,7 @@ class Scene {
 				const notePositionYNormalized = this.normalize(notePositionY, this.minNotePositionY, this.maxNotePositionY);
 				const midiNoteMapIndex = Math.min(Math.floor(notePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
 				const noteDistance = noteToPlay.position.distanceTo(this.getCameraPosition());
-				const noteDistanceNormalized = Math.pow(this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance), 4);
+				const noteDistanceNormalized = Math.pow(this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance), 2);
 				if (Module.sendBang) { // check if emscripten module is ready
 					// sending a note, velocity pair to pd
 					Module.startMessage(2);
