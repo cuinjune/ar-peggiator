@@ -11,8 +11,8 @@ import { Gimbal } from './gimbal.js';
 ////////////////////////////////////////////////////////////////////////////////
 
 // detect mobile device or not
-// const isMobile = (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
-const isMobile = true;
+const isMobile = (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+// const isMobile = true;
 // socket.io
 let socket;
 let id; //my socket id
@@ -52,9 +52,7 @@ class Scene {
 		this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 		this.renderer.setSize(this.width, this.height);
-		if (isMobile) {
-			this.renderer.xr.enabled = true;
-		}
+		this.renderer.xr.enabled = true;
 
 		// push the canvas to the DOM
 		container.appendChild(this.renderer.domElement);
@@ -63,17 +61,17 @@ class Scene {
 		window.addEventListener("resize", () => this.windowResized());
 
 		// AR button
-		if (isMobile) {
-			document.body.appendChild(ARButton.createButton(this.renderer));
-			this.controller = this.renderer.xr.getController(0);
-			this.controller.addEventListener('selectstart', () => this.onSelectStart());
-			this.controller.addEventListener('select', () => this.onSelect());
-			this.controller.addEventListener('selectend', () => this.onSelectEnd());
-			this.scene.add(this.controller);
-			// for getting the device hardware rotation
-			this.gimbal = new Gimbal();
-			this.gimbal.enable();
-		}
+		document.body.appendChild(ARButton.createButton(this.renderer));
+		this.controller = this.renderer.xr.getController(0);
+		this.controller.addEventListener('selectstart', () => this.onSelectStart());
+		this.controller.addEventListener('select', () => this.onSelect());
+		this.controller.addEventListener('selectend', () => this.onSelectEnd());
+		this.scene.add(this.controller);
+
+		// for getting the device hardware rotation
+		this.gimbal = new Gimbal();
+		this.gimbal.enable();
+
 		// touch state
 		this.isTouched = false;
 		this.touchedTime = 0;
@@ -137,6 +135,7 @@ class Scene {
 			{ value: 83, name: "B5" },
 			{ value: 84, name: "C6" }
 		];
+
 		// add player
 		this.addSelf();
 
@@ -154,7 +153,10 @@ class Scene {
 		// array of note ids in string for a sequencer to play (stored in reverse play order)
 		this.noteToPlayIds = [];
 
-		// array of pointer to the playing notes stored with note id as a key
+		// used for playing poly notes
+		this.notesToPlayIds = {}; // notesToPlayIds[clientID] = array of note ids in string for a sequencer to play
+
+		// array of pointer to the playing notes stored with note id as keys
 		this.notesToPlay = {};
 
 		// start the sequencer clock (sync with other users as much as possible)
@@ -248,29 +250,38 @@ class Scene {
 	////////////////////////////////////////////////////////////////////////////////
 
 	addClient(_clientProp, _id) {
-		const obj = {
-			color: new THREE.Color().setHSL(_clientProp.hue, this.saturation, this.lightness)
-		};
-		this.addPlayer(obj);
-		clients[_id].player = obj.player;
+		if (_clientProp.isMobile) {
+			const obj = {
+				color: new THREE.Color().setHSL(_clientProp.hue, this.saturation, this.lightness)
+			};
+			this.addPlayer(obj);
+			clients[_id].player = obj.player;
+			clients[_id].playerRotation = new THREE.Vector3(0, 0, 0);
+			this.notesToPlayIds[_id] = [];
+		}
 	}
 
 	updateClientMoves(_clientProps) {
 		for (let _id in _clientProps) {
-			if (_id != id && clients[_id]) {
+			if (_id != id && clients[_id] && _clientProps[_id].isMobile) {
 				const playerPosition = new THREE.Vector3().fromArray(_clientProps[_id].position);
 				const playerQuaternion = new THREE.Quaternion().fromArray(_clientProps[_id].quaternion);
 				clients[_id].player.position.lerp(playerPosition, this.clientMoveLerpAmount);
 				clients[_id].player.quaternion.slerp(playerQuaternion, this.clientMoveLerpAmount);
+				if (!isMobile) {
+					clients[_id].playerRotation = new THREE.Vector3().fromArray(_clientProps[_id].rotation);
+				}
 			}
 		}
 	}
 
 	setHue(_hue) {
-		this.hue = _hue;
-		this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
-		this.playerEye.material.color.set(this.color);
-		this.previewedNote.material.color.set(this.color);
+		if (isMobile) {
+			this.hue = _hue;
+			this.color = new THREE.Color().setHSL(this.hue, this.saturation, this.lightness);
+			this.playerEye.material.color.set(this.color);
+			this.previewedNote.material.color.set(this.color);
+		}
 	}
 
 	addedNoteID(_id) {
@@ -297,10 +308,27 @@ class Scene {
 		}
 	}
 
-	removeClient(_id) {
+	updateNotesToPlayIds(_clientProps) {
+		if (!isMobile) {
+			let voiceNum = 0;
+			for (let _id in _clientProps) {
+				if (_id != id && clients[_id] && _clientProps[_id].isMobile) {
+					if (!this.notesToPlayIds[_id].length) {
+						const noteToPlayIds = _clientProps[_id].noteToPlayIds;
+						for (let i = 0; i < noteToPlayIds.length; i++) {
+							this.notesToPlayIds[_id].push(noteToPlayIds[i]);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	removeClient(_clientProp, _id) {
 		// remove player from scene
-		if (clients[_id]) {
+		if (clients[_id] && _clientProp.isMobile) {
 			this.scene.remove(clients[_id].player);
+			delete this.notesToPlayIds[_id];
 		}
 	}
 
@@ -311,7 +339,8 @@ class Scene {
 	getPlayerMove() {
 		return [
 			[this.player.position.x, this.player.position.y, this.player.position.z],
-			[this.player.quaternion.x, this.player.quaternion.y, this.player.quaternion.z, this.player.quaternion.w]
+			[this.player.quaternion.x, this.player.quaternion.y, this.player.quaternion.z, this.player.quaternion.w],
+			[this.playerRotation.x, this.playerRotation.y, this.playerRotation.z]
 		];
 	}
 
@@ -429,7 +458,7 @@ class Scene {
 	// sequencer
 	////////////////////////////////////////////////////////////////////////////////
 
-	sequencerClock() {
+	playNote(cameraPosition, numVoices, pdReceiverName) {
 		let noteToPlayId = "", noteToPlay = null;
 		while (this.noteToPlayIds.length && !noteToPlay) { // skip unfound note and play the next one
 			noteToPlayId = this.noteToPlayIds.pop();
@@ -447,14 +476,33 @@ class Scene {
 			if (notePositionY >= this.minNotePositionY && notePositionY <= this.maxNotePositionY) {
 				const notePositionYNormalized = this.normalize(notePositionY, this.minNotePositionY, this.maxNotePositionY);
 				const midiNoteMapIndex = Math.min(Math.floor(notePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
-				const noteDistance = noteToPlay.position.distanceTo(this.getCameraPosition());
+				const noteDistance = noteToPlay.position.distanceTo(cameraPosition);
 				const noteDistanceNormalized = Math.pow(this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance), 2);
 				if (Module.sendBang) { // check if emscripten module is ready
+					Module.sendFloat("numVoices", numVoices);
 					// sending a note, velocity pair to pd
 					Module.startMessage(2);
 					Module.addFloat(this.midiNoteMap[midiNoteMapIndex].value);
 					Module.addFloat(noteDistanceNormalized);
-					Module.finishList("note");
+					Module.finishList(pdReceiverName);
+				}
+			}
+		}
+	}
+
+	sequencerClock() {
+		if (isMobile) {
+			this.playNote(this.getCameraPosition(), 1, "note0");
+		}
+		else {
+			socket.emit('getNotesToPlayIds');
+			const numVoices = Object.keys(this.notesToPlayIds).length;
+			let voiceNum = 0;
+			for (const _id in this.notesToPlayIds) {
+				this.noteToPlayIds = this.notesToPlayIds[_id];
+				if (clients[_id]) {
+					this.playNote(clients[_id].player.position, numVoices, "note" + voiceNum);
+					voiceNum++;
 				}
 			}
 		}
@@ -466,87 +514,99 @@ class Scene {
 	////////////////////////////////////////////////////////////////////////////////
 
 	update() {
-		// update player movement
-		this.player.position.copy(this.getCameraPosition());
-		this.player.quaternion.copy(this.getCameraQuaternion());
+		if (isMobile) {
+			// update player movement
+			this.player.position.copy(this.getCameraPosition());
+			this.player.quaternion.copy(this.getCameraQuaternion());
 
-		// send player movement to server (calls back updateClientMoves)
-		socket.emit('playerMoved', this.getPlayerMove());
-
-		if (Module.sendBang) { // check if emscripten module is ready
-			if (isMobile) {
+			if (Module.sendBang) { // check if emscripten module is ready
 				// let's use the device's hardware rotation which seems to be more stable 
 				this.gimbal.update();
 				this.playerRotation.lerp(new THREE.Vector3(-this.gimbal.pitch, this.gimbal.yaw, -this.gimbal.roll), this.playerRotationLerpAmount);
+				const halfPI = Math.PI * 0.5;
+				Module.sendFloat("env0", this.normalize(this.playerRotation.x, halfPI, -halfPI));
+				Module.sendFloat("dec0", this.normalize(this.playerRotation.z, halfPI, -halfPI));
 			}
-			else {
-				this.playerRotation.lerp(this.player.rotation, this.playerRotationLerpAmount);
-			}
-			const halfPI = Math.PI * 0.5;
-			Module.sendFloat("env", this.normalize(this.playerRotation.x, halfPI, -halfPI));
-			Module.sendFloat("dec", this.normalize(this.playerRotation.z, halfPI, -halfPI));
-		}
 
-		// update previewed note movement
-		if (this.isNotePreviewed) {
-			const previewedNotePosition = new THREE.Vector3().set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
-			const previewedNoteScale = new THREE.Vector3(1, 1, 1);
-			this.previewedNote.position.lerp(previewedNotePosition, this.previewedNoteLerpAmount);
-			this.previewedNote.scale.lerp(previewedNoteScale, this.previewedNoteLerpAmount);
-			// display the note text
-			const previewedNotePositionY = this.previewedNote.position.y;
-			if (previewedNotePositionY >= this.minNotePositionY && previewedNotePositionY <= this.maxNotePositionY) {
-				const previewedNotePositionYNormalized = this.normalize(previewedNotePositionY, this.minNotePositionY, this.maxNotePositionY);
-				const midiNoteMapIndex = Math.min(Math.floor(previewedNotePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
-				for (let i = 0; i < this.noteTexts.length; i++) {
-					if (this.noteTexts[i].visible) {
-						this.noteTexts[i].visible = false;
-					}
-				}
-				this.noteTexts[midiNoteMapIndex].scale.copy(this.previewedNote.scale);
-				this.noteTexts[midiNoteMapIndex].visible = true;
-			}
-		}
+			// send player movement to server (calls back updateClientMoves)
+			socket.emit('playerMoved', this.getPlayerMove());
 
-		// if there's no more note left to play, check which notes are in camera view and store new notes to play
-		if (this.noteToPlayIds.length == 0) {
-			// if the user is currently previewing a note, push its name to the ids array (it will be played lastly) 
+			// update previewed note movement
 			if (this.isNotePreviewed) {
-				this.noteToPlayIds.push(this.previewedNote.name);
+				const previewedNotePosition = new THREE.Vector3().set(0, 0, -0.1).applyMatrix4(this.controller.matrixWorld);
+				const previewedNoteScale = new THREE.Vector3(1, 1, 1);
+				this.previewedNote.position.lerp(previewedNotePosition, this.previewedNoteLerpAmount);
+				this.previewedNote.scale.lerp(previewedNoteScale, this.previewedNoteLerpAmount);
+				// display the note text
+				const previewedNotePositionY = this.previewedNote.position.y;
+				if (previewedNotePositionY >= this.minNotePositionY && previewedNotePositionY <= this.maxNotePositionY) {
+					const previewedNotePositionYNormalized = this.normalize(previewedNotePositionY, this.minNotePositionY, this.maxNotePositionY);
+					const midiNoteMapIndex = Math.min(Math.floor(previewedNotePositionYNormalized * this.midiNoteMap.length), this.midiNoteMap.length - 1);
+					for (let i = 0; i < this.noteTexts.length; i++) {
+						if (this.noteTexts[i].visible) {
+							this.noteTexts[i].visible = false;
+						}
+					}
+					this.noteTexts[midiNoteMapIndex].scale.copy(this.previewedNote.scale);
+					this.noteTexts[midiNoteMapIndex].visible = true;
+				}
 			}
-			this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
-			const frustum = new THREE.Frustum();
-			frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
-			for (let i = this.notes.length; i--;) {
-				if (frustum.containsPoint(this.notes[i].position)) {
-					// stored in reverse play order (first element will be played lastly)
-					this.noteToPlayIds.push(this.notes[i].name);
+
+			// if there's no more note left to play, check which notes are in camera view and store new notes to play
+			if (this.noteToPlayIds.length == 0) {
+				// if the user is currently previewing a note, push its name to the ids array (it will be played lastly) 
+				if (this.isNotePreviewed) {
+					this.noteToPlayIds.push(this.previewedNote.name);
+				}
+				this.camera.matrixWorldInverse.getInverse(this.camera.matrixWorld);
+				const frustum = new THREE.Frustum();
+				frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+				for (let i = this.notes.length; i--;) {
+					if (frustum.containsPoint(this.notes[i].position)) {
+						// stored in reverse play order (first element will be played lastly)
+						this.noteToPlayIds.push(this.notes[i].name);
+					}
+				}
+				// send my noteToPlayIds to server
+				socket.emit('addNoteToPlayIds', this.noteToPlayIds);
+			}
+		}
+		else { //isMobile == false
+			// send player movement to server (calls back updateClientMoves)
+			socket.emit('playerMoved', this.getPlayerMove());
+			let voiceNum = 0;
+			for (const _id in this.notesToPlayIds) {
+				this.noteToPlayIds = this.notesToPlayIds[_id];
+				if (clients[_id]) {
+					const halfPI = Math.PI * 0.5;
+					Module.sendFloat("env" + voiceNum, this.normalize(clients[_id].playerRotation.x, halfPI, -halfPI));
+					Module.sendFloat("dec" + voiceNum, this.normalize(clients[_id].playerRotation.z, halfPI, -halfPI));
+					voiceNum++;
 				}
 			}
 		}
-
 		// for animating the playing note back to original
-		for (const noteToPlayId in this.notesToPlay) {
-			if (this.notesToPlay[noteToPlayId]) {
+		for (const _id in this.notesToPlay) {
+			if (this.notesToPlay[_id]) {
 				const hsl = { h: 0, s: 0, l: 0 };
-				this.notesToPlay[noteToPlayId].material.color.getHSL(hsl);
+				this.notesToPlay[_id].material.color.getHSL(hsl);
 				// if the note is close enough to original, set to original and remove the note from array
-				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[noteToPlayId].scale.x < 1.001) {
-					this.notesToPlay[noteToPlayId].material.color.setHSL(hsl.h, hsl.s, this.lightness);
-					if (this.notesToPlay[noteToPlayId].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
-						this.notesToPlay[noteToPlayId].scale.set(1, 1, 1);
+				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[_id].scale.x < 1.001) {
+					this.notesToPlay[_id].material.color.setHSL(hsl.h, hsl.s, this.lightness);
+					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[_id].scale.set(1, 1, 1);
 					}
-					delete this.notesToPlay[noteToPlayId];
+					delete this.notesToPlay[_id];
 				}
 				else {
-					this.notesToPlay[noteToPlayId].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
-					if (this.notesToPlay[noteToPlayId].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
-						this.notesToPlay[noteToPlayId].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
+					this.notesToPlay[_id].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
+					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[_id].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
 					}
 				}
 			}
 			else {
-				delete this.notesToPlay[noteToPlayId];
+				delete this.notesToPlay[_id];
 			}
 		}
 
@@ -567,9 +627,9 @@ function addClient(_clientProp, _id) {
 }
 
 // remove client object
-function removeClient(_id) {
+function removeClient(_clientProp, _id) {
 	console.log('A user disconnected with the id: ' + _id);
-	glScene.removeClient(_id);
+	glScene.removeClient(_clientProp, _id);
 	delete clients[_id];
 }
 
@@ -583,6 +643,7 @@ function initSocketConnection() {
 		// keep a local copy of my ID:
 		console.log('My socket ID is: ' + _id);
 		id = _id;
+		socket.emit('setMobile', isMobile);
 
 		// for each existing user, add them as a client
 		for (let i = 0; i < _ids.length; i++) {
@@ -609,9 +670,9 @@ function initSocketConnection() {
 	});
 
 	// when a user has been disconnected from the server
-	socket.on('userDisconnected', (_id) => {
+	socket.on('userDisconnected', (_clientProp, _id) => {
 		if (_id != id) {
-			removeClient(_id);
+			removeClient(_clientProp, _id);
 		}
 	});
 
@@ -628,6 +689,11 @@ function initSocketConnection() {
 	// update when there is any change to notes data
 	socket.on('updateNotes', _notes => {
 		glScene.updateNotes(_notes);
+	});
+
+	// update when there is any change to notes data
+	socket.on('updateNotesToPlayIds', _clientProps => {
+		glScene.updateNotesToPlayIds(_clientProps);
 	});
 
 	// update when one of the users moves in space

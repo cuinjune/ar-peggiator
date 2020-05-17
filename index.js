@@ -100,9 +100,12 @@ io.on('connection', client => {
 
   // add a new client indexed by his id
   clients[client.id] = {
+    isMobile: true,
     hue: (hue += hueInterval) % 1,
     position: [0, 0, 0],
-    quaternion: [0, 0, 0, 0]
+    quaternion: [0, 0, 0, 0],
+    rotation: [0, 0, 0],
+    noteToPlayIds: []
   }
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -111,9 +114,6 @@ io.on('connection', client => {
 
   // make sure to send clients, his ID, and a list of all keys
   client.emit('introduction', clients, client.id, Object.keys(clients));
-
-  // update everyone that the number of users has changed
-  io.sockets.emit('newUserConnected', clients[client.id], io.engine.clientsCount, client.id);
 
   // send the hue value to myself
   client.emit('setHue', clients[client.id].hue);
@@ -125,10 +125,19 @@ io.on('connection', client => {
   // receivers 
   ////////////////////////////////////////////////////////////////////////////////
 
+  client.on('setMobile', (_data) => {
+    if (clients[client.id]) {
+      clients[client.id].isMobile = _data;
+      // update everyone that the number of users has changed
+      io.sockets.emit('newUserConnected', clients[client.id], io.engine.clientsCount, client.id);
+    }
+  });
+
   client.on('playerMoved', (_data) => {
     if (clients[client.id]) {
       clients[client.id].position = _data[0];
       clients[client.id].quaternion = _data[1];
+      clients[client.id].rotation = _data[2];
       client.emit('updateClientMoves', clients); // send back to the sender
     }
   });
@@ -139,7 +148,7 @@ io.on('connection', client => {
       const _hue = clients[client.id].hue;
       const _position = _data;
       data.notes.push({ id: _id, hue: _hue, position: _position });
-      
+
       // send the added note id to myself
       client.emit('addedNoteID', _id); // send back to the sender
 
@@ -161,11 +170,30 @@ io.on('connection', client => {
     }
   });
 
+  client.on('addNoteToPlayIds', (_data) => {
+    if (clients[client.id]) {
+      clients[client.id].noteToPlayIds = [];
+      for (let i = 0; i < _data.length; i++) {
+        const index = data.notes.map(function (note) { return note.id; }).indexOf(_data[i]);
+        if (index != -1) {
+          clients[client.id].noteToPlayIds.push(data.notes[index].id);
+        }
+      }
+    }
+  });
+
+  client.on('getNotesToPlayIds', () => {
+    if (clients[client.id]) {
+      // send the clients to myself
+      client.emit('updateNotesToPlayIds', clients);
+    }
+  });
+
   // handle the disconnection
   client.on('disconnect', () => {
-    delete clients[client.id];
-    io.sockets.emit('userDisconnected', client.id);
+    io.sockets.emit('userDisconnected', clients[client.id], client.id);
     console.log('User ' + client.id + ' diconnected, there are ' + io.engine.clientsCount + ' clients connected');
+    delete clients[client.id];
   });
 });
 
