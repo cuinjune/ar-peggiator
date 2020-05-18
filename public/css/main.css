@@ -43,14 +43,77 @@ canvas {
 	background-image: linear-gradient(to right bottom, #d16ba5, #c777b9, #ba83ca, #aa8fd8, #9a9ae1, #80abee, #67bbf3, #59c9f0, #62dde4, #8fedd0, #c7f8bf, #ffffbb);
 }
 
+#subtitle {
+	display: none;
+	flex-direction: column;
+	justify-content: space-around;
+	align-items: center;
+	white-space: pre;
+}
+
+#speakerToggle {
+	display: none;
+	flex-direction: column;
+	justify-content: space-around;
+	align-items: center;
+	margin-top: -1.2em;
+	font-size: 100%;
+}
+
+.speaker {
+	vertical-align: middle;
+	box-sizing: border-box;
+	display: inline-block;
+	background: currentColor;
+	background-clip: content-box;
+	width: 1em;
+	height: 1em;
+	border: .333em solid transparent;
+	border-right-color: currentColor;
+	position: relative;
+	left: -.337em;
+}
+
+.speaker.-on:before, .speaker.-on:after {
+	content: '';
+	background: currentColor;
+	width: .1em;
+	position: absolute;
+}
+.speaker.-on:before {
+	height: .333em;
+	right: -.533em;
+}
+.speaker.-on:after {
+	height: .667em;
+	right: -.733em;
+	top: -50%;
+}
+.speaker.-off:before, .speaker.-off:after {
+	content: '';
+	background: currentColor;
+	width: .1em;
+	position: absolute;
+	height: 1.2em;
+	margin-top: -.333em;
+	top: -.1em;
+	left: .1em;
+	transform: translateX(.333em) rotate(-45deg);
+}
+.speaker.-off:before {
+	background: #808080;
+	left: .2em;
+}
+
 #instruction {
-	display: flex;
+	display: none;
 	flex-direction: column;
 	justify-content: space-around;
 	align-items: center;
 	text-align: left;
 	line-height: 2em;
 	font-weight: bold;
+	margin-left: -0.5em;
 	margin-top: 5em;
 	width: 100%;
 	height: 30%;

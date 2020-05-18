@@ -16,12 +16,14 @@ var ARButton = {
                 renderer.xr.setSession(session);
                 button.textContent = 'STOP AR';
                 currentSession = session;
+                resumeAudio();
             }
 
             function onSessionEnded( /*event*/) {
                 currentSession.removeEventListener('end', onSessionEnded);
                 button.textContent = 'START AR';
                 currentSession = null;
+                suspendAudio();
             }
 
             button.style.display = '';

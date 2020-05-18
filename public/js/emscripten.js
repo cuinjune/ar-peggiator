@@ -29,11 +29,17 @@ function resumeAudio() {
     });
 }
 
-// resume audio on events
-["click", "contextmenu", "auxclick", "dblclick"
-    , "mousedown", "mouseup", "pointerup", "touchend"
-    , "keydown", "keyup"
-].forEach(name => document.addEventListener(name, resumeAudio));
+function suspendAudio() {
+    audioContextList.forEach(ctx => {
+        if (ctx.state !== "suspended") { ctx.suspend(); }
+    });
+}
+
+// // resume audio on events
+// ["click", "contextmenu", "auxclick", "dblclick"
+//     , "mousedown", "mouseup", "pointerup", "touchend"
+//     , "keydown", "keyup"
+// ].forEach(name => document.addEventListener(name, resumeAudio));
 
 // emscripten module
 var Module = {

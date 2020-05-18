@@ -12,7 +12,19 @@ import { Gimbal } from './gimbal.js';
 
 // detect mobile device or not
 const isMobile = (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
-// const isMobile = true;
+if (isMobile) {
+	document.getElementById("subtitle").style.display = "flex";
+	document.getElementById("instruction").style.display = "flex";
+}
+else {
+	const subtitle = document.getElementById("subtitle");
+	subtitle.textContent = "Please visit the link with your Android device to use the AR app.\r\nHere you can see and hear existing users performance in real-time.";
+	subtitle.style.display = "flex";
+	const speakerToggle = document.getElementById("speakerToggle");
+	speakerToggle.style.display = "flex";
+	document.getElementById("info").style.zIndex = "-1";
+}
+
 // socket.io
 let socket;
 let id; //my socket id
@@ -40,7 +52,7 @@ class Scene {
 		this.scene = new THREE.Scene();
 
 		// camera
-		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.02, 100);
+		this.camera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.02, 1100);
 		this.scene.add(this.camera);
 
 		// light
@@ -52,25 +64,45 @@ class Scene {
 		this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 		this.renderer.setSize(this.width, this.height);
-		this.renderer.xr.enabled = true;
 
+		if (isMobile) {
+			this.renderer.xr.enabled = true;
+		}
+		else {
+			// transparent background scene for desktop
+			this.backgroundScene = new THREE.Scene();
+			this.backgroundCamera = new THREE.PerspectiveCamera(70, this.width / this.height, 0.02, 1100);
+			this.backgroundScene.add(this.backgroundCamera);
+		}
 		// push the canvas to the DOM
 		container.appendChild(this.renderer.domElement);
 
 		// window resize listener
 		window.addEventListener("resize", () => this.windowResized());
 
-		// AR button
-		document.body.appendChild(ARButton.createButton(this.renderer));
-		this.controller = this.renderer.xr.getController(0);
-		this.controller.addEventListener('selectstart', () => this.onSelectStart());
-		this.controller.addEventListener('select', () => this.onSelect());
-		this.controller.addEventListener('selectend', () => this.onSelectEnd());
-		this.scene.add(this.controller);
+		if (isMobile) {
+			// AR button
+			document.body.appendChild(ARButton.createButton(this.renderer));
+			this.controller = this.renderer.xr.getController(0);
+			this.controller.addEventListener('selectstart', () => this.onSelectStart());
+			this.controller.addEventListener('select', () => this.onSelect());
+			this.controller.addEventListener('selectend', () => this.onSelectEnd());
+			this.scene.add(this.controller);
 
-		// for getting the device hardware rotation
-		this.gimbal = new Gimbal();
-		this.gimbal.enable();
+			// for getting the device hardware rotation
+			this.gimbal = new Gimbal();
+			this.gimbal.enable();
+		}
+		else {
+			// room mesh
+			const geometry = new THREE.SphereBufferGeometry(500, 60, 40);
+			// invert the geometry on the x-axis so that all of the faces point inward
+			geometry.scale(-1, 1, 1);
+			const texture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/2294472375_24a3b8ef46_o.jpg');
+			const material = new THREE.MeshBasicMaterial({ map: texture });
+			const mesh = new THREE.Mesh(geometry, material);
+			this.scene.add(mesh);
+		}
 
 		// touch state
 		this.isTouched = false;
@@ -139,13 +171,18 @@ class Scene {
 		// add player
 		this.addSelf();
 
-		// add preview note
-		this.addPreviewNote();
+		if (isMobile) {
+			// add preview note
+			this.addPreviewNote();
 
-		// add note texts
-		this.noteTexts = [];
-		const fontLoader = new THREE.FontLoader();
-		fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => this.addNoteTexts(font));
+			// add note texts
+			this.noteTexts = [];
+			const fontLoader = new THREE.FontLoader();
+			fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => this.addNoteTexts(font));
+		}
+		else {
+			this.player.visible = false;
+		}
 
 		// notes array to be copied from server notes
 		this.notes = [];
@@ -310,7 +347,6 @@ class Scene {
 
 	updateNotesToPlayIds(_clientProps) {
 		if (!isMobile) {
-			let voiceNum = 0;
 			for (let _id in _clientProps) {
 				if (_id != id && clients[_id] && _clientProps[_id].isMobile) {
 					if (!this.notesToPlayIds[_id].length) {
@@ -479,6 +515,7 @@ class Scene {
 				const noteDistance = noteToPlay.position.distanceTo(cameraPosition);
 				const noteDistanceNormalized = Math.pow(this.normalize(noteDistance, this.maxNoteDistance, this.minNoteDistance), 2);
 				if (Module.sendBang) { // check if emscripten module is ready
+					// sending a number of voices to pd
 					Module.sendFloat("numVoices", numVoices);
 					// sending a note, velocity pair to pd
 					Module.startMessage(2);
@@ -512,6 +549,32 @@ class Scene {
 	////////////////////////////////////////////////////////////////////////////////
 	// rendering
 	////////////////////////////////////////////////////////////////////////////////
+
+	animateNotesToPlay() {
+		for (const _id in this.notesToPlay) {
+			if (this.notesToPlay[_id]) {
+				const hsl = { h: 0, s: 0, l: 0 };
+				this.notesToPlay[_id].material.color.getHSL(hsl);
+				// if the note is close enough to original, set to original and remove the note from array
+				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[_id].scale.x < 1.001) {
+					this.notesToPlay[_id].material.color.setHSL(hsl.h, hsl.s, this.lightness);
+					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[_id].scale.set(1, 1, 1);
+					}
+					delete this.notesToPlay[_id];
+				}
+				else {
+					this.notesToPlay[_id].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
+					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
+						this.notesToPlay[_id].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
+					}
+				}
+			}
+			else {
+				delete this.notesToPlay[_id];
+			}
+		}
+	}
 
 	update() {
 		if (isMobile) {
@@ -570,10 +633,27 @@ class Scene {
 				// send my noteToPlayIds to server
 				socket.emit('addNoteToPlayIds', this.noteToPlayIds);
 			}
+			// for animating playing notes back to original
+			this.animateNotesToPlay();
+
+			// render
+			this.renderer.render(this.scene, this.camera);
 		}
 		else { //isMobile == false
+
+			// for animating playing notes back to original
+			this.animateNotesToPlay();
+
 			// send player movement to server (calls back updateClientMoves)
 			socket.emit('playerMoved', this.getPlayerMove());
+
+			// transparent background scene
+			this.renderer.setViewport(0, 0, this.width, this.height);
+			this.renderer.setScissor(0, 0, this.width, this.height);
+			this.renderer.setScissorTest(true);
+			this.renderer.setClearColor(0x000000, 0);
+			this.renderer.render(this.backgroundScene, this.backgroundCamera);
+			const numVoices = Object.keys(this.notesToPlayIds).length;
 			let voiceNum = 0;
 			for (const _id in this.notesToPlayIds) {
 				this.noteToPlayIds = this.notesToPlayIds[_id];
@@ -581,37 +661,24 @@ class Scene {
 					const halfPI = Math.PI * 0.5;
 					Module.sendFloat("env" + voiceNum, this.normalize(clients[_id].playerRotation.x, halfPI, -halfPI));
 					Module.sendFloat("dec" + voiceNum, this.normalize(clients[_id].playerRotation.z, halfPI, -halfPI));
+					const height = Math.floor(this.height * 0.7);
+					const width = Math.floor(height * 0.4737);
+					const left = Math.floor(this.width / (numVoices + 1) * (voiceNum + 1) - width * 0.5);
+					const bottom = Math.floor(this.height * 0.4 - height * 0.5);
+					this.renderer.setViewport(left, bottom, width, height);
+					this.renderer.setScissor(left, bottom, width, height);
+					this.renderer.setScissorTest(true);
+					this.camera.aspect = width / height;
+					this.camera.position.copy(clients[_id].player.position);
+					this.camera.quaternion.copy(clients[_id].player.quaternion);
+					this.camera.updateProjectionMatrix();
+
+					// render
+					this.renderer.render(this.scene, this.camera);
 					voiceNum++;
 				}
 			}
 		}
-		// for animating the playing note back to original
-		for (const _id in this.notesToPlay) {
-			if (this.notesToPlay[_id]) {
-				const hsl = { h: 0, s: 0, l: 0 };
-				this.notesToPlay[_id].material.color.getHSL(hsl);
-				// if the note is close enough to original, set to original and remove the note from array
-				if (hsl.l - this.lightness < 0.001 && this.notesToPlay[_id].scale.x < 1.001) {
-					this.notesToPlay[_id].material.color.setHSL(hsl.h, hsl.s, this.lightness);
-					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
-						this.notesToPlay[_id].scale.set(1, 1, 1);
-					}
-					delete this.notesToPlay[_id];
-				}
-				else {
-					this.notesToPlay[_id].material.color.lerp(new THREE.Color().setHSL(hsl.h, hsl.s, this.lightness), this.noteToPlayLerpAmount);
-					if (this.notesToPlay[_id].scale.x > 1) { // ignore the previewed note which starts from scale 0 to 1
-						this.notesToPlay[_id].scale.lerp(new THREE.Vector3(1, 1, 1), this.noteToPlayLerpAmount);
-					}
-				}
-			}
-			else {
-				delete this.notesToPlay[_id];
-			}
-		}
-
-		// render
-		this.renderer.render(this.scene, this.camera);
 	}
 }
 
@@ -717,6 +784,18 @@ function createScene() {
 ////////////////////////////////////////////////////////////////////////////////
 
 window.onload = async () => {
+	if (!isMobile) {
+		document.body.onmousedown = function () {
+			if (speaker.className == "speaker -off") {
+				speaker.className = "speaker -on";
+				resumeAudio();
+			}
+			else if (speaker.className == "speaker -on") {
+				speaker.className = "speaker -off";
+				suspendAudio();
+			}
+		};
+	}
 
 	// initialize socket connection
 	initSocketConnection();
