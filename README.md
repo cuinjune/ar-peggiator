@@ -10,9 +10,9 @@ When another user joins, the notes created by other users will be visible to the
 All these features make the app perfectly suitable for live performance as well as a collaborative musical experience.
 
 Here's the [Link to the app](https://ar-peggiator.herokuapp.com/).
+You can also use the following QR code to go to the app link on your Android device.
 
 <img src="QR.png" alt="QR Code" width="200"/>
-You can also use this QR code to go to the app link on your Android device.
 
 If you visit the link on your **Desktop Chrome browser**, you can see and hear all connected Android users' performance in real-time.
 <img src="screenshot2.png" alt="Desktop Screenshot" width="1000"/>
