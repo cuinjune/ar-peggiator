@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // whether to support safari or not
-const shouldSupportSafari = true;
+const shouldSupportSafari = false;
 
 // create an AudioContext
 const audioContextList = [];

@@ -97,7 +97,7 @@ class Scene {
 			// room mesh
 			const geometry = new THREE.SphereBufferGeometry(500, 60, 40);
 			// invert the geometry on the x-axis so that all of the faces point inward
-			geometry.scale(-1, 1, 1);
+			geometry.scale(-0.002, 0.002, 0.002);
 			const texture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/2294472375_24a3b8ef46_o.jpg');
 			const material = new THREE.MeshBasicMaterial({ map: texture });
 			const mesh = new THREE.Mesh(geometry, material);
