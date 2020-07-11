@@ -51,9 +51,9 @@ static void lrshift_tilde_dsp(t_lrshift_tilde *x, t_signal **sp)
         shift = -n;
     if (shift < 0)
         dsp_add(rightshift_perform, 4,
-            sp[0]->s_vec + n, sp[1]->s_vec + n, (t_int)n, (t_int)(-shift));
+            sp[0]->s_vec + n, sp[1]->s_vec + n, n, -shift);
     else dsp_add(leftshift_perform, 4,
-            sp[0]->s_vec, sp[1]->s_vec, (t_int)n, (t_int)shift);
+            sp[0]->s_vec, sp[1]->s_vec, n, shift);
 }
 
 static void *lrshift_tilde_new(t_floatarg f)

@@ -30,7 +30,7 @@ static void oss_midiout(int fd, int n)
 {
     char b = n;
     if ((write(fd, (char *) &b, 1)) != 1)
-        perror("MIDI write");
+        perror("midi write");
 }
 
 #define O_MIDIFLAG O_NDELAY

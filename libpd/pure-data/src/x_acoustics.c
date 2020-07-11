@@ -7,7 +7,7 @@
 
 #include "m_pd.h"
 #include <math.h>
-#define LOGTEN 2.302585092994046
+#define LOGTEN 2.302585092994
 
 t_float mtof(t_float f)
 {

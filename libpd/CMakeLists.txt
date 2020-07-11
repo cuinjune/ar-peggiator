@@ -243,8 +243,8 @@ endif()
 target_link_libraries(libpd PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
 if(NOT MSVC AND NOT APPLE AND NOT EMSCRIPTEN)
-    find_library(M m)
-    target_link_libraries(libpd PUBLIC ${M_LIBRARIES})
+    find_library(MATH_LIB m)
+    target_link_libraries(libpd PUBLIC ${MATH_LIB})
 endif()
 
 if(PD_BUILD_C_EXAMPLES)

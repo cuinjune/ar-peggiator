@@ -393,8 +393,7 @@ void iemgui_send(void *x, t_iemgui *iemgui, t_symbol *s)
     iemgui->x_snd = snd = canvas_realizedollar(iemgui->x_glist, snd);
     iemgui->x_fsf.x_snd_able = sndable;
     iemgui_verify_snd_ne_rcv(iemgui);
-    if(glist_isvisible(iemgui->x_glist))
-        (*iemgui->x_draw)(x, iemgui->x_glist, IEM_GUI_DRAW_MODE_IO + oldsndrcvable);
+    (*iemgui->x_draw)(x, iemgui->x_glist, IEM_GUI_DRAW_MODE_IO + oldsndrcvable);
 }
 
 void iemgui_receive(void *x, t_iemgui *iemgui, t_symbol *s)
@@ -428,8 +427,7 @@ void iemgui_receive(void *x, t_iemgui *iemgui, t_symbol *s)
     }
     iemgui->x_fsf.x_rcv_able = rcvable;
     iemgui_verify_snd_ne_rcv(iemgui);
-    if(glist_isvisible(iemgui->x_glist))
-        (*iemgui->x_draw)(x, iemgui->x_glist, IEM_GUI_DRAW_MODE_IO + oldsndrcvable);
+    (*iemgui->x_draw)(x, iemgui->x_glist, IEM_GUI_DRAW_MODE_IO + oldsndrcvable);
 }
 
 void iemgui_label(void *x, t_iemgui *iemgui, t_symbol *s)
@@ -541,11 +539,8 @@ void iemgui_displace(t_gobj *z, t_glist *glist, int dx, int dy)
 
     x->x_obj.te_xpix += dx;
     x->x_obj.te_ypix += dy;
-    if(glist_isvisible(x->x_glist))
-    {
-        (*x->x_draw)((void *)z, glist, IEM_GUI_DRAW_MODE_MOVE);
-        canvas_fixlinesfor(glist, (t_text *)z);
-    }
+    (*x->x_draw)((void *)z, glist, IEM_GUI_DRAW_MODE_MOVE);
+    canvas_fixlinesfor(glist, (t_text *)z);
 }
 
 void iemgui_select(t_gobj *z, t_glist *glist, int selected)
@@ -553,8 +548,7 @@ void iemgui_select(t_gobj *z, t_glist *glist, int selected)
     t_iemgui *x = (t_iemgui *)z;
 
     x->x_fsf.x_selected = selected;
-    if(glist_isvisible(x->x_glist))
-        (*x->x_draw)((void *)z, glist, IEM_GUI_DRAW_MODE_SELECT);
+    (*x->x_draw)((void *)z, glist, IEM_GUI_DRAW_MODE_SELECT);
 }
 
 void iemgui_delete(t_gobj *z, t_glist *glist)

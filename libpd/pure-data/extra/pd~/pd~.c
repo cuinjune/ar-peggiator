@@ -40,7 +40,6 @@ typedef int socklen_t;
 #include "ext_proto.h"
 #include "ext_obex.h"
 
-typedef float t_float;
 typedef double t_floatarg;
 #define w_symbol w_sym
 #define A_SYMBOL A_SYM
@@ -608,7 +607,7 @@ static void pd_tilde_dsp(t_pd_tilde *x, t_signal **sp)
     for (i = 0, g = x->x_outsig; i < x->x_noutsig; i++, g++)
         *g = (*(sp++))->s_vec;
     
-    dsp_add(pd_tilde_perform, 2, x, (t_int)n);
+    dsp_add(pd_tilde_perform, 2, x, n);
 }
 
 static void pd_tilde_pdtilde(t_pd_tilde *x, t_symbol *s,
