@@ -1,5 +1,5 @@
 # ARpeggiator
-<img src="screenshot1.png" alt="Android Screenshot" width="1000"/>
+[![Introducing ARpeggiator](https://yt-embed.herokuapp.com/embed?v=wPBz9ljrH7w)](https://www.youtube.com/watch?v=wPBz9ljrH7w "Introducing ARpeggiator")
 
 The ARpeggiator is a collaborative augmented reality (AR) music-making application that works in **Chrome on Android** devices allowing multiple users to make music together in real-time by creating spherical notes in AR space.
 
