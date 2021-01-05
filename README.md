@@ -47,4 +47,4 @@ WebXR, Three.js, Pure Data, Emscripten, Node.js, Express, Socket.io, uuid
 Please post an [issue](https://github.com/cuinjune/ar-peggiator/issues) if you face any problem using the app.
 
 ## Author
-* [Zack Lee](https://www.cuinjune.com/about): an MPS Candidate at [NYU ITP](https://itp.nyu.edu).
+* [Zack Lee](https://www.cuinjune.com/about): MPS Candidate at [NYU ITP](https://itp.nyu.edu).
